@@ -1,8 +1,8 @@
-# Code repository for the analysis of Visium spatial transcriptomics data from melanoma leptomeningeal (LMM) and extra-cranial metastases
+# Analysis of spatial transcriptomics data from melanoma leptomeningeal (LMM) and extra-cranial metastases
 
 This repository contains scripts associated with the pre-print manuscript entitled: *Spatial 
 transcriptomics analysis identifies a unique tumor-promoting function of the meningeal stroma in 
-melanoma leptomeningeal disease*. The manuscript can be accessed [here](https://doi.org/xxxxxxxxxxxx). 
+melanoma leptomeningeal disease*. The manuscript can be accessed [here](https://www.biorxiv.org/content/10.1101/2023.12.18.572266v1). 
 Data used in this code is stored in the Gene Expression Omnibus (GEO) under accession 
 number (XXXXXXXXX). Whenever possible and/or relevant, intermediate or result files are 
 included in this repository. Unix and R code was contributed by Oscar Ospina.
