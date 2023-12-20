@@ -3,8 +3,8 @@
 This repository contains scripts associated with the pre-print manuscript entitled: *Spatial 
 transcriptomics analysis identifies a unique tumor-promoting function of the meningeal stroma in 
 melanoma leptomeningeal disease*. The manuscript can be accessed [here](https://www.biorxiv.org/content/10.1101/2023.12.18.572266v1). 
-Data used in this code is stored in the Gene Expression Omnibus (GEO) under accession 
-number (XXXXXXXXX). Whenever possible and/or relevant, intermediate or result files are 
+Data used in this code is stored in the Gene Expression Omnibus (GEO) (accession number available
+upon publication). Whenever possible and/or relevant, intermediate or result files are 
 included in this repository. Unix and R code was contributed by Oscar Ospina.
 
 The .fastq files from Illumina outputs were processed using [Space Ranger](https://www.10xgenomics.com/support/software/space-ranger/tutorials/count-ff-tutorial). 
