@@ -1,0 +1,414 @@
+---
+title: "Figures LMM spatial transcriptomics manuscript"
+---
+
+```{r eval=F}
+library('tidyverse')
+```
+
+# Barplot of cell types
+```{r eval=F}
+# Read curated cell types
+fp = '../data/topic_manual_deconvolution.xlsx'
+samplenames = readxl::excel_sheets(fp)
+
+curated_cells = list()
+for(i in samplenames){
+  curated_cells[[i]] = readxl::read_excel(fp, sheet=i) %>%
+    select(topic, cell_type_curated)
+} 
+
+# Read deconvolution matrices with curated cell names
+fps = list.dirs('../data/deconv_matrices', recursive=F)
+deconprop_cellnames = list()
+spot_props = list()
+for(i in samplenames){
+  fp = paste0(grep(i, fps, value=T), '/', i, '_deconv_matrix_w_gsea_cellnames.csv')
+  # Transfer curated cell types to deconvolution matrices
+  deconprop_cellnames[[i]] = read_delim(fp, delim=',', show_col_types=F) %>%
+    rename(barcode=gene) # Column was named incorrectly probably during deconvolution
+  colnames(deconprop_cellnames[[i]]) = c('barcode', 
+                                         paste0(curated_cells[[i]]$topic, '_', 
+                                                curated_cells[[i]]$cell_type_curated))
+  
+  # Sum all proportions and divide by number of spots
+  spot_props[[i]] = as_tibble(as.list(colSums(deconprop_cellnames[[i]][, -1]) / nrow(deconprop_cellnames[[i]]))) %>%
+    t() %>%
+    as.data.frame() %>%
+    rename(prop=1) %>%
+    rownames_to_column(var='cell_type') %>%
+    mutate(cell_type=str_replace(cell_type, '^t[0-9]{1,2}_', '')) %>%
+    group_by(cell_type) %>%
+    summarise(prop=sum(prop)) %>%
+    add_column(sample=i, .before=1)
+}
+
+rm(curated_cells) # Clean environment
+
+# Combine spot proportions for all samples
+# Reorder cell types so that melanoma is at the bottom of bars
+spot_props_summ = dplyr::bind_rows(spot_props) %>%
+  mutate(cell_type=factor(cell_type, levels=unique(c(grep('^neuron|fibroblast|stroma|melanoma', 
+                                                          unique(.[['cell_type']]), value=T, invert=T), 
+                                                     'neuron', 'stroma_vascular', 'fibroblast', 
+                                                     'stroma', 'stroma_immune', 'melanoma'))))
+
+# Reorder samples according to proportion of melanoma
+sample_order = spot_props_summ[spot_props_summ[['cell_type']] == 'melanoma', ] %>%
+  arrange(desc(prop)) %>%
+  select(sample) %>%
+  unlist() %>%
+  as.vector()
+spot_props_summ = spot_props_summ %>%
+  mutate(sample=factor(sample, levels=sample_order)) 
+
+# Get tissue colors for sample names
+tissue_cols = khroma::color('highcontrast')(3)
+tissue_cols = ifelse(levels(spot_props_summ$sample) %in% c("sample2_LMM_B2", "sample7_LMM_A1", "sample8_LMM_B3", 
+                                                           "sample12_LMM_B4", "sample13_LMM_B1"), tissue_cols[2], tissue_cols[3])
+
+rm(sample_order) # Clean environment
+
+# Specify cell topic colors
+topic_cols=as.vector(khroma::color('smoothrainbow')(length(unique(spot_props_summ$cell_type))))
+names(topic_cols) = c(
+  'fibroblast',
+  'stroma',
+  'stroma_immune',
+  'b_cell',
+  'epithelial',
+  'neuron',
+  'glial_neuron',
+  'oligodendrocyte',
+  'endothelial',
+  'stroma_vascular',
+  'tumor_immune',
+  'melanoma'
+)
+
+cellprop_p = ggplot(spot_props_summ, aes(x=sample, y=prop, fill=cell_type)) +
+  geom_bar(stat="identity", position="stack") +
+  ylab('Average decovolved\ncell proportion') +
+  xlab(NULL) +
+  scale_fill_manual(values=topic_cols) +
+  scale_x_discrete(position="top") +
+  guides(fill=guide_legend(ncol=2, title=NULL)) +
+  theme(axis.text.x=element_text(angle=45, hjust=0, colour=tissue_cols),
+        panel.border=element_rect(colour="black", fill=NA))
+
+pdf('cellprop_barplot.pdf', width=12, height=4)
+print(cellprop_p)
+dev.off()
+
+rm(spot_props) # Clean environment
+```
+
+## LDA model selection
+```{r eval=F}
+# File paths of stored LDA models
+# Results of the LDA model fitting stored as RDS objects
+fps = list.files('[DIR_PATH_RDS_OBJECTS_LDA_MODELS]', full.names=T, pattern='_lda_model_results.RDS')
+
+# Sample names
+samplenames = gsub('_lda_model_results.RDS', '', fps) %>%
+  str_extract(., 'sample[0-9]{1,2}[_0-9A-Z]+$')
+
+p = list()
+for(sample_name in samplenames){
+  fp_tmp = grep(sample_name, fps, value=T)
+  lda_tmp = readRDS(fp_tmp)
+  
+  # Extract alphas
+  model_alphas = c()
+  for(j in names(lda_tmp[['models']])){
+    model_alphas = append(model_alphas, lda_tmp[['models']][[j]]@alpha)
+  }
+  
+  # Create data frame for plotting
+  metrics_df = tibble(k=as.numeric(names(lda_tmp[['models']])),
+                      alpha=model_alphas,
+                      perplexity=lda_tmp[['perplexities']],
+                      scaled_perplexity=scales::rescale(lda_tmp[['perplexities']], to=c(0, 15)),
+                      rare_types=lda_tmp[['numRare']])
+  
+  # Create vector of colors for alphas
+  col_alpha = ifelse(metrics_df[['alpha']] > 1, 'orange', 'gray50')
+  
+  # Create plot title
+  p_title = paste0(sample_name,  ' - ', 
+                  "LDA model metrics<br>
+                  Model alpha: (
+                  <span style='color: gray50;'>a<1</span> | 
+                  <span style='color: orange;'>a>1</span>
+                  )")
+  
+  p[[sample_name]] = ggplot(metrics_df, aes(x=k)) +
+    geom_line(aes(y=rare_types), col='blue') +
+    geom_line(aes(y=scaled_perplexity), col='red') +
+    geom_text(aes(y=-1, label=sprintf('%.2f', alpha)), angle=45, col=col_alpha) +
+    xlab('Number of topics (i.e., cell types)') + 
+    scale_y_continuous('Topics present in <5% of the spots',
+                       breaks=seq(-1, 15),
+                       sec.axis=sec_axis(~., name="Perplexity",
+                                         breaks=seq(0, max(metrics_df$k)),
+                                         labels=sprintf('%.1f', seq(min(metrics_df$perplexity),
+                                                                    max(metrics_df$perplexity),
+                                                                    length.out=max(metrics_df$k)+1)))) +
+    scale_x_continuous(breaks=as.numeric(names(lda_tmp[['models']]))) +
+    ggtitle(p_title) +
+    ggthemes::theme_base() +
+    theme(axis.title.y.left=element_text(color="blue"),
+          axis.text.y.left=element_text(color=c('gray50', rep('blue', 16))),
+          axis.title.y.right=element_text(color="red"),
+          axis.text.y.right=element_text(color='red'),
+          axis.ticks.y.left=element_line(color=c('white', rep("black", 16))),
+          plot.title=ggtext::element_markdown(size=10))
+  
+  rm(fp_tmp, lda_tmp, model_alphas, metrics_df, col_alpha, p_title) # Clean environment
+}  
+
+pdf('model_metrics.pdf', height=14, width=10)
+print(
+  ggpubr::ggarrange(plotlist=p, ncol=2, nrow=3)
+)
+dev.off()
+```
+
+## Spot cell type proportions
+```{r include=F}
+# Load Seurat objects to get coordinate data
+# Seurat objects are stored as a named list (sample names). The named list is saved as an RDS object
+fp = '[NAMED_LIST_SEURAT_OBJECTS]'
+seuratobjs = readRDS(fp)
+rm(fp) # Clean env
+```
+
+```{r include=F}
+# Create scatterpie plots for each sample
+collapsed_dfs = list()
+spatial_prop_p = list()
+for(i in samplenames){
+  cat(paste0(i, '\n'))
+  # Get coordinates
+  pos = seuratobjs[[i]]@images[[i]]@coordinates %>%
+    rownames_to_column(var='barcode') %>%
+    select(barcode, y=imagerow, x=imagecol) #%>%
+#    column_to_rownames(var='barcode')
+  
+  # Aggregate topics with same phenotype
+  collapsed_dfs[[i]] = deconprop_cellnames[[i]]
+  if(length(grep('_melanoma', colnames(collapsed_dfs[[i]]))) > 1){
+    dup_topics = length(grep('_melanoma', colnames(collapsed_dfs[[i]])))
+    collapsed_dfs[[i]][[paste0('melanoma', '_x', dup_topics)]] = rowSums(collapsed_dfs[[i]][, grep('_melanoma', colnames(collapsed_dfs[[i]]))])
+    collapsed_dfs[[i]] = collapsed_dfs[[i]][, -grep('_melanoma', colnames(collapsed_dfs[[i]]))]
+  }
+  if(length(grep('_fibroblast', colnames(collapsed_dfs[[i]]))) > 1){
+    dup_topics = length(grep('_fibroblast', colnames(collapsed_dfs[[i]])))
+    collapsed_dfs[[i]][[paste0('fibroblast', '_x', dup_topics)]] = rowSums(collapsed_dfs[[i]][, grep('_fibroblast', colnames(collapsed_dfs[[i]]))])
+    collapsed_dfs[[i]] = collapsed_dfs[[i]][, -grep('_fibroblast', colnames(collapsed_dfs[[i]]))]
+  }
+  if(length(grep('_stroma_immune', colnames(collapsed_dfs[[i]]))) > 1){
+    dup_topics = length(grep('_stroma_immune', colnames(collapsed_dfs[[i]])))
+    collapsed_dfs[[i]][[paste0('stroma_immune', '_x', dup_topics)]] = rowSums(collapsed_dfs[[i]][, grep('_stroma_immune', colnames(collapsed_dfs[[i]]))])
+    collapsed_dfs[[i]] = collapsed_dfs[[i]][, -grep('_stroma_immune', colnames(collapsed_dfs[[i]]))]
+  }
+  if(length(grep('_stroma$', colnames(collapsed_dfs[[i]]))) > 1){
+    dup_topics = length(grep('_stroma$', colnames(collapsed_dfs[[i]])))
+    collapsed_dfs[[i]][[paste0('stroma', '_x', dup_topics)]] = rowSums(collapsed_dfs[[i]][, grep('_stroma$', colnames(collapsed_dfs[[i]]))])
+    collapsed_dfs[[i]] = collapsed_dfs[[i]][, -grep('_stroma$', colnames(collapsed_dfs[[i]]))]
+  }
+  
+  # Add dummy column if only one cell type present in sample
+  collapsed_dfs[[i]] = collapsed_dfs[[i]] %>%
+    column_to_rownames(var='barcode') %>%
+    add_column(dummycol=0)
+  
+  # Remove topic identifiers from columns
+  colnames(collapsed_dfs[[i]]) = gsub('^t[0-9]{1,2}_', '', colnames(collapsed_dfs[[i]]))
+  
+  # Create plot title
+  plot_title = str_replace(i, '(?<=sample[0-9]{1,2})_', ': (') %>%
+    str_replace(., 'sample', 'Sample ') %>%
+    str_replace(., '$', ')') 
+  
+  # Add dummy color in case only one cell type present in sample
+  topic_cols_tmp = c()
+  # Adjust names of cells
+  for(topic in colnames(collapsed_dfs[[i]])){
+    if(gsub('_x[0-9]{1,2}$', '', topic) %in% names(topic_cols)){
+      topic_cols_tmp = append(topic_cols_tmp,
+                              topic_cols[names(topic_cols) == gsub('_x[0-9]{1,2}$', '', topic)]) 
+    }
+  }
+  topic_cols_tmp = append(topic_cols_tmp, c(dummycol='#FFFFFF')) # Add dummycol at the end to match column orders
+  names(topic_cols_tmp) = colnames(collapsed_dfs[[i]])
+  
+  df_tmp = collapsed_dfs[[i]] %>%
+    rownames_to_column(var='barcode') %>%
+    left_join(pos #%>%
+                #rownames_to_column(var='barcode')
+              , by='barcode') %>%
+    mutate(radius=13)
+  
+  spatial_prop_p[[i]] = ggplot() +
+    scatterpie::geom_scatterpie(data=df_tmp, aes(x=x, y=y, group=barcode, r=radius), cols=names(topic_cols_tmp), color=NA) +
+    ggtitle(plot_title) +
+    scale_fill_manual(values=topic_cols_tmp) +
+    scale_y_reverse() +
+    coord_equal() +
+    theme_void() +
+    theme(legend.position="bottom", legend.title=element_blank())
+  
+  rm(topic, topic_cols_tmp, pos, df_tmp) # Clean environment
+}
+
+rm(dup_topics, plot_title) # Clean environment
+
+pdf('stdeconvolve_spatial_piecharts.pdf', height=16, width=12)
+print(
+  ggpubr::ggarrange(plotlist=spatial_prop_p, ncol=2, nrow=3, common.legend=F, legend='bottom')
+)
+dev.off()
+```
+
+## Tissue domain proportions
+```{r include=F}
+# Specify tissue domain colors
+domain_cols = c("#1965B0", "#F7F056", "#DC050C", "#FFFFFF")
+names(domain_cols) = c('stroma', 'immune', "tumor", "dummycol")
+
+# Merge cell types into domains and plot
+domain_props = list()
+sample_domain_props = list()
+domain_prop_p = list()
+for(i in names(collapsed_dfs)){
+  # Specify categories to collapse
+  tumor_cats = grep('melanoma', colnames(collapsed_dfs[[i]]), value=T)
+  immune_cats = grep(paste0(c('b_cell', 'immune'), collapse='|'), colnames(collapsed_dfs[[i]]), value=T)
+  stroma_cats = colnames(collapsed_dfs[[i]])[!(colnames(collapsed_dfs[[i]]) %in% c(tumor_cats, immune_cats, 'dummycol'))]
+  
+  # Sum categories in collapsed categories
+  domain_props[[i]] = tibble(barcode=rownames(collapsed_dfs[[i]])) %>%
+    mutate(tumor=rowSums(dplyr::select(.data=collapsed_dfs[[i]], all_of(tumor_cats)))) %>%
+    mutate(immune=rowSums(dplyr::select(.data=collapsed_dfs[[i]], all_of(immune_cats)))) %>%
+    mutate(stroma=rowSums(dplyr::select(.data=collapsed_dfs[[i]], all_of(stroma_cats)))) %>%
+    mutate(dummycol=0) %>%
+    column_to_rownames(var='barcode')
+  
+  if(any(round(rowSums(domain_props[[i]]), 5) != 1)){
+    cat(crayon::red(paste0('\nSample ', i, ' has rowSums larger or lower than 1.\n')))
+  }
+  
+  cat(paste0(i, '\n'))
+  # Get coordinates
+  pos = seuratobjs[[i]]@images[[i]]@coordinates %>%
+    rownames_to_column(var='barcode') %>%
+    select(barcode, y=imagerow, x=imagecol) #%>%
+    #column_to_rownames(var='barcode')
+  
+  # Create plot title
+  plot_title = str_replace(i, '(?<=sample[0-9]{1,2})_', ': (') %>%
+    str_replace(., 'sample', 'Sample ') %>%
+    str_replace(., '$', ')') 
+  
+  df_tmp = domain_props[[i]] %>%
+    rownames_to_column(var='barcode') %>%
+    left_join(pos #%>%
+                #rownames_to_column(var='barcode')
+              , by='barcode') %>%
+    mutate(radius=10)
+  
+  domain_prop_p[[i]] = ggplot() +
+    scatterpie::geom_scatterpie(data=df_tmp, aes(x=x, y=y, group=barcode, r=radius), cols=names(domain_cols), color=NA) +
+    ggtitle(plot_title) +
+    scale_fill_manual(values=domain_cols) +
+    scale_y_reverse() +
+    coord_equal() +
+    theme_void() +
+    theme(legend.position="bottom", legend.title=element_blank())
+  
+  # Summarize propotions per sample to generate barplot
+  sample_domain_props[[i]] = as_tibble(as.list(colSums(domain_props[[i]]) / nrow(domain_props[[i]]))) %>%
+    select(-c('dummycol')) %>%
+    t() %>%
+    as.data.frame() %>%
+    rename(prop=1) %>%
+    rownames_to_column(var='domain') %>%
+    add_column(sample=i, .before=1)
+  
+  rm(pos, plot_title, tumor_cats, immune_cats, stroma_cats, df_tmp) # Clean environment
+}
+
+pdf('tissue_domain_spatial_piecharts.pdf', height=16, width=12)
+print(
+  ggpubr::ggarrange(plotlist=domain_prop_p, ncol=2, nrow=3, common.legend=F, legend='bottom')
+)
+dev.off()
+
+# Combine spot proportions for all samples
+# Reorder cell types so that melanoma is at the bottom of bars
+domain_props_summ = dplyr::bind_rows(sample_domain_props) %>%
+  mutate(domain=factor(domain, levels=c('immune', 'stroma', 'tumor')))
+
+# Reorder samples according to proportion of melanoma
+sample_order = domain_props_summ[domain_props_summ[['domain']] == 'tumor', ] %>%
+  arrange(desc(prop)) %>%
+  select(sample) %>%
+  unlist() %>%
+  as.vector()
+domain_props_summ = domain_props_summ %>%
+  mutate(sample=factor(sample, levels=sample_order)) 
+
+domainprop_p = ggplot(domain_props_summ, aes(x=sample, y=prop, fill=domain)) +
+  geom_bar(stat="identity", position="stack") +
+  ylab('Average decovolved\ndomain proportion') +
+  xlab(NULL) +
+  scale_fill_manual(values=domain_cols[-4]) +
+  scale_x_discrete(position="top") +
+  guides(fill=guide_legend(ncol=1, title=NULL)) +
+  theme(axis.text.x=element_text(angle=45, hjust=0, colour=tissue_cols),
+        panel.border=element_rect(colour="black", fill=NA))
+
+pdf('tissue_domain_prop_barplot.pdf', width=12, height=4)
+print(domainprop_p)
+dev.off()
+
+rm(domain_props_summ) # Clean environment
+```
+
+## Tissue domain classes (no scatterpies)
+```{r include=F}
+spot_domains = list()
+spot_domains_p =list()
+for(i in names(domain_props)){
+  # Get coordinates
+  pos = seuratobjs[[i]]@images[[i]]@coordinates %>%
+    rownames_to_column(var='barcode') %>%
+    select(barcode, y=imagerow, x=imagecol)
+  
+  spot_domains[[i]] = domain_props[[i]] %>%
+    mutate(domain=colnames(.)[apply(., 1, which.max)]) %>%
+    rownames_to_column(var='barcode') %>%
+    right_join(pos, ., by='barcode') 
+  
+  # Create plot title
+  plot_title = str_replace(i, '(?<=sample[0-9]{1,2})_', ': (') %>%
+    str_replace(., 'sample', 'Sample ') %>%
+    str_replace(., '$', ')') 
+  
+  spot_domains_p[[i]] = ggplot(spot_domains[[i]], aes(x=x, y=y)) +
+    geom_point(aes(color=domain)) +
+    ggtitle(plot_title) +
+    scale_color_manual(values=domain_cols) +
+    scale_y_reverse() +
+    coord_equal() +
+    theme_void()
+}
+
+pdf('tissue_domains_collapsed_class.pdf', height=16, width=12)
+print(
+  ggpubr::ggarrange(plotlist=spot_domains_p, ncol=2, nrow=3, common.legend=F, legend='bottom')
+)
+dev.off()
+```
+

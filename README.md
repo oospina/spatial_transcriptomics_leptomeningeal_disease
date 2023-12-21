@@ -17,18 +17,31 @@ spatial gene set enrichment analysis (STenrich) were conducted in [`spatialGE`](
 The `pre_processing` folder contains scripts to use `spaceranger mkfastq` in order to 
 generate .fastq files from the Illumina outputs and `spaceranger count` to generate gene
 expression count matrices.
-* `pre_processing/code/visium_mkfastq.sh`: A PBS script to run `spaceranger mkfastq` on an
+* `pre_processing/visium_mkfastq.sh`: A PBS script to run `spaceranger mkfastq` on an
 HPC environment and obtain .fastq files from the Illumina sequencing runs. The script was 
 executed separately for each Illumina run. The resulting folder contains demultiplexed .fastq 
 files for each sample.
-* `pre_processing/code/visium_count.sh`: An example PBS script to run `spaceranger count` on an
+* `pre_processing/visium_count.sh`: An example PBS script to run `spaceranger count` on an
 HPC environment and obtain gene expression counts. Counts are assigned to genes in the GRCh38-2020-A
 reference genome (downloadable at https://www.10xgenomics.com/support/software/cell-ranger/downloads/).
 In order to run the script, a folder containing the tissue images ("HandE\_images\_spranger\_input") 
 taken on each Visium slide area.
-* `pre_processing/data/spaceranger_visium_mkfastq.csv`: The .csv file used in `spaceranger mkfastq`,
-which that relates sample names and Illumina dual-indexes used in library construction.
-* `pre_processing/data/loupe_manual_alignments_input`: A series of .json files containing coordinates for
-manual alignment of spots to tissue images. The manual alignment was done only for samples where it
-was necessary. The files are used during execution of `spaceranger count`.
 
+## `manuscript_figures`:
+The `manuscript_figures` folder contains a script to generate figures included in the manuscript
+* `manuscript_figures/figures_lmm_manuscript.Rmd`: An R Markdown script to generate the individual
+plots in the panel figures of the manuscript.
+
+## `data`:
+The `data` folder contains some of the files necessary to run the spatial analysis pipeline.
+Other files need to be produced by the user given constraints in size.
+* `data/loupe_manual_alignments_input`: A series of .json files containing coordinates for
+manual alignment of spots to tissue images. The manual alignment was done only for samples 
+when it was necessary. The files are used during execution of `spaceranger count`.
+* `data/deconv_matrices`: Matrices containing relative abundance of each LDA topic at each Visium
+spot
+* `data/spaceranger_visium_mkfastq.csv`: The .csv file used in `spaceranger mkfastq`,
+which that relates sample names and Illumina dual-indexes used in library construction.
+* `data/topic_manual_deconvolution.xlsx`: The final biological annotations given to each LDA 
+topic and the original annotation given by GSEA. The rationale for changes in final annotation
+is also provided in this file.

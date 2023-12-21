@@ -15,4 +15,4 @@
 
 module load bcl2fastq/2.20 
 
-spaceranger mkfastq --id=first_run_visium_mkfastq --run=data/210524_VH00250_68_AAAKFHCM5 --csv=data/spaceranger_visium_mkfastq.csv --qc
+spaceranger mkfastq --id=first_run_visium_mkfastq --run=../data/210524_VH00250_68_AAAKFHCM5 --csv=../data/spaceranger_visium_mkfastq.csv --qc
