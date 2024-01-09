@@ -27,6 +27,18 @@ reference genome (downloadable at https://www.10xgenomics.com/support/software/c
 In order to run the script, a folder containing the tissue images ("HandE\_images\_spranger\_input") 
 taken on each Visium slide area.
 
+## `unsupervised_clustering`:
+The `unsupervised_clustering` folder contains code to perform unsupervised cluster detection and
+differential gene expression of the samples (separately and integrated).
+* `unsupervised_clustering/unsuperv_cluster_merged.Rmd`: A pipeline to read Space Ranger outputs and 
+create a Seurat object with gene expression data from all the samples merged in a single 
+matrix. Both log-transformed and SCT-transformed data are generated. Louvain clusters are
+identified.
+* `unsupervised_clustering/unsuperv_cluster_separate.Rmd`: A pipeline to read Space Ranger outputs and 
+create a Seurat object for each sample, resulting in a named list of seurat objects. Both 
+log-transformed and SCT-transformed data are generated. Louvain clusters are identified for each sample.
+These are used in downstream analyses.
+
 ## `manuscript_figures`:
 The `manuscript_figures` folder contains a script to generate figures included in the manuscript
 * `manuscript_figures/figures_lmm_manuscript.Rmd`: An R Markdown script to generate the individual

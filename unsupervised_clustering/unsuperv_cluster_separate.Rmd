@@ -1,0 +1,189 @@
+---
+title: "Unsupervised clustering on separate Visium samples"
+---
+
+```{r include=F}
+library('tidyverse')
+library('Seurat')
+library('clustree')
+```
+
+```{r include=F}
+# The folder structure containing the Space Ranger outputs follows the format:
+# H5 file: "./sample1/sample1/outs/filtered_feature_bc_matrix.h5"
+# "spatial" folder (x,y coordinates, H&E image, scale factors): "./sample1/sample1/outs/spatial"
+
+# Get spatial data file paths
+stout_fp = '[FOLDER WITH SPACE RANGER DIRECTORIES-ONE PER SAMPLE]'
+stout_fp = list.files(stout_fp, full.names=T, pattern='sample[0-9]+')
+
+# Remove file paths if a manual alignment is available
+stoutfinal_fp = c()
+samplename = c()
+for(i in 1:16){
+  fp = grep(paste0('sample', i, '_'), stout_fp, value=T)
+  fp = list.dirs(fp, full.names=T, recursive=F) %>%
+    paste0(., '/outs')
+  
+  stoutfinal_fp = append(stoutfinal_fp, fp)
+  samplename = append(samplename, as.vector(na.omit(str_extract(fp, 'sample[0-9]+_[A-Z0-9_?]+'))))
+}
+
+rm(fp, stout_fp) # Clean env
+```
+
+```{r include=F, eval=F}
+# Create Seurat objects from spatial data and store in list
+
+seed_num = 12345
+st_seurat = list()
+for(i in samplename){
+  # Read Visium outputs and put Seurat objects in list
+  fp = grep(i, stoutfinal_fp, value=T)
+  st_seurat[[i]] = Load10X_Spatial(data.dir=fp, slice=i)
+  st_seurat[[i]]@meta.data$orig.ident = i
+  
+  # Filter spots with few genes
+  st_seurat[[i]] = subset(st_seurat[[i]], subset=(nFeature_Spatial >= 100))
+  
+  # Remove low-count genes
+  counts = GetAssayData(st_seurat[[i]])
+  genes_keep = rownames(counts)[rowSums(counts) >= 10]
+  st_seurat[[i]] = subset(st_seurat[[i]], features=genes_keep)
+  
+  # Calculate mitchondrial and ribosomal gene percentages per spot
+  st_seurat[[i]][["percent_mt"]] = PercentageFeatureSet(st_seurat[[i]], pattern="^MT-")
+  st_seurat[[i]][["percent_rb"]] = PercentageFeatureSet(st_seurat[[i]], pattern="^RP[L|S]")
+  
+  # Log-normalize data
+  st_seurat[[i]] = NormalizeData(st_seurat[[i]], verbose=F, assay="Spatial")
+  st_seurat[[i]] = FindVariableFeatures(st_seurat[[i]], verbose=F, assay="Spatial", 
+                                        nfeatures=3000)
+  st_seurat[[i]] = ScaleData(st_seurat[[i]], assay="Spatial", 
+                             features=rownames(st_seurat[[i]]), verbose=F)
+  
+  # Apply SCTransform to data
+  st_seurat[[i]] = SCTransform(st_seurat[[i]], assay="Spatial", verbose=F, 
+                               return.only.var.genes=F, seed.use=seed_num)
+
+  DefaultAssay(st_seurat[[i]]) = "SCT"
+  rm(fp, counts, genes_keep) # Clean environment
+}
+
+# Save Seurat objects
+saveRDS(st_seurat, 'separate_seuratobjs_visium_log_and_sct_louvainclusters.RDS')
+
+rm(stoutfinal_fp) # Clean environment
+```
+
+```{r include=F, eval=F}
+# Run dimensionality reduction and clustering workflow using SCT
+for(i in samplename){
+  DefaultAssay(st_seurat[[i]]) = "Spatial"
+  st_seurat[[i]] = RunPCA(st_seurat[[i]], verbose=F, assay='Spatial', seed.use=seed_num, 
+                          reduction.name='pca_log')
+  st_seurat[[i]] = FindNeighbors(st_seurat[[i]], dims=1:50, assay='Spatial', verbose=F,
+                                 reduction='pca_log')
+  st_seurat[[i]] = FindClusters(st_seurat[[i]], verbose=F, resolution=c(0.1, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4),
+                                random.seed=seed_num)
+  st_seurat[[i]] = RunUMAP(st_seurat[[i]], dims=1:50, assay='Spatial', seed.use=seed_num,
+                           reduction.name='umap_log', reduction='pca_log')
+  
+  DefaultAssay(st_seurat[[i]]) = "SCT"
+  st_seurat[[i]] = RunPCA(st_seurat[[i]], verbose=F, assay='SCT', seed.use=seed_num, 
+                          reduction.name='pca_sct')
+  st_seurat[[i]] = FindNeighbors(st_seurat[[i]], dims=1:50, assay='SCT', verbose=F,
+                                 reduction='pca_sct')
+  st_seurat[[i]] = FindClusters(st_seurat[[i]], verbose=F, resolution=c(0.1, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4),
+                                random.seed=seed_num)
+  st_seurat[[i]] = RunUMAP(st_seurat[[i]], dims=1:50, assay='SCT', seed.use=seed_num, 
+                           reduction.name='umap_sct', reduction='pca_sct')
+}
+
+# Save updated Seurat objects
+saveRDS(st_seurat, 'separate_seuratobjs_visium_log_and_sct_louvainclusters.RDS')
+```
+
+```{r include=F}
+# Read Seurat objects
+st_seurat = readRDS('separate_seuratobjs_visium_log_and_sct_louvainclusters.RDS')
+```
+
+```{r echo=F}
+# Look at UMAP clusters
+i = 2
+p1 = DimPlot(st_seurat[[i]], reduction="umap_log", group.by="Spatial_snn_res.0.8") +
+  ggtitle('umap_log')
+p2 = DimPlot(st_seurat[[i]], reduction="umap_sct", group.by="SCT_snn_res.0.8") +
+  ggtitle('umap_sct')
+
+p1 + p2
+```
+
+```{r echo=F}
+# Plot gene expression
+i = 8
+DefaultAssay(st_seurat[[i]]) = "Spatial"
+p3 = SpatialFeaturePlot(st_seurat[[i]], image.alpha=0, features='MLANA') +
+  ggtitle('log_expr')
+DefaultAssay(st_seurat[[i]]) = "SCT"
+p4 = SpatialFeaturePlot(st_seurat[[i]], image.alpha=0, features='MLANA') +
+  ggtitle('sct_expr')
+
+p3 + p4
+```
+
+```{r include=F, eval=F}
+# Find DE genes by comparing each cluster against all other clusters
+# Exclude mitochondrial and ribosomal genes
+degenes_list = list()
+for(i in samplename){
+  degenes_list[[i]] = list()
+  
+  # Detect DE genes using log-counts
+  DefaultAssay(st_seurat[[i]]) = "Spatial"
+  genes_tmp = grep(pattern="^RP[L|S]|^MT-", rownames(st_seurat[[i]]), invert=T, value=T)
+  st_seurat_tmp = subset(st_seurat[[i]], features=genes_tmp)
+  
+  # Get cluster assignments that were generated from log-counts
+  identities = grep('Spatial_snn', colnames(st_seurat_tmp@meta.data), value=T)
+  
+  for(id in identities){
+    Idents(st_seurat_tmp) = id
+    degenes_list[[i]][[id]] = FindAllMarkers(st_seurat_tmp, only.pos=T)
+  }
+  
+  rm(genes_tmp, st_seurat_tmp, id) # Clean environment
+}
+
+# Save differentially expressed genes
+saveRDS(degenes_list, 'results/de_genes_separate_seuratobjs_visium_log_louvainclusters.RDS')
+```
+
+```{r echo=F}
+# Read list with DE genes
+degenes_list = readRDS(
+  '../results/de_genes_separate_seuratobjs_visium_log_louvainclusters.RDS')
+```
+
+```{r include=F}
+# Make clustree plots
+ct_log_ls = list()
+ct_sct_ls = list()
+for(i in names(st_seurat)){
+  df_tmp = st_seurat[[i]]@meta.data
+  ct_log_ls[[paste0(i, '_log')]] = clustree(df_tmp, prefix="Spatial_snn_res.", node_colour="sc3_stability") + ggtitle(i)
+  ct_sct_ls[[paste0(i, '_log')]] = clustree(df_tmp, prefix="SCT_snn_res.", node_colour="sc3_stability") + ggtitle(i)
+  
+  rm(df_tmp) # Clean env
+}
+
+pdf('../results/clustree_log_counts.pdf')
+print(ct_log_ls)
+dev.off()
+
+pdf('../results/clustree_sct_counts.pdf')
+print(ct_sct_ls)
+dev.off()
+```
+

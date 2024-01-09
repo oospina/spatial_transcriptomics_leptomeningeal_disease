@@ -1,0 +1,192 @@
+---
+title: "Unsupervised clustering on merged samples"
+---
+
+```{r include=F}
+library('tidyverse')
+library('Seurat')
+```
+
+```{r include=F}
+# The folder structure containing the Space Ranger outputs follows the format:
+# H5 file: "./sample1/sample1/outs/filtered_feature_bc_matrix.h5"
+# "spatial" folder (x,y coordinates, H&E image, scale factors): "./sample1/sample1/outs/spatial"
+
+# Get spatial data file paths
+stout_fp = '[FOLDER WITH SPACE RANGER DIRECTORIES-ONE PER SAMPLE]'
+stout_fp = list.files(stout_fp, full.names=T, pattern='sample[0-9]+')
+
+# Remove file paths if a manual alignment is available
+stoutfinal_fp = c()
+samplename = c()
+for(i in 1:16){
+  fp = grep(paste0('sample', i, '_'), stout_fp, value=T)
+  fp = list.dirs(fp, full.names=T, recursive=F) %>%
+    paste0(., '/outs')
+  
+  stoutfinal_fp = append(stoutfinal_fp, fp)
+  samplename = append(samplename, as.vector(na.omit(str_extract(fp, 'sample[0-9]+_[A-Z0-9_?]+'))))
+}
+
+rm(fp, stout_fp) # Clean env
+```
+
+```{r include=F, eval=T}
+# Create Seurat objects from spatial data and store in list
+
+# Read Visium outputs and put Seurat objects in list
+st_seurat_ls = list()
+for(i in 1:length(stoutfinal_fp)){
+  st_seurat_ls[[samplename[i]]] = Load10X_Spatial(data.dir=stoutfinal_fp[i], slice=samplename[i])
+  st_seurat_ls[[samplename[i]]]@meta.data$orig.ident = samplename[i]
+  
+  # Filter spots with few genes
+  st_seurat_ls[[samplename[i]]] = subset(st_seurat_ls[[samplename[i]]], subset=(nFeature_Spatial >= 100))
+  
+  # Remove low-count genes
+  counts = GetAssayData(st_seurat_ls[[samplename[i]]])
+  genes_keep = rownames(counts)[rowSums(counts) >= 10]
+  st_seurat_ls[[samplename[i]]] = subset(st_seurat_ls[[samplename[i]]], features=genes_keep)
+  
+  # Calculate mitchondrial and ribosomal gene percentages per spot
+  st_seurat_ls[[samplename[i]]][["percent_mt"]] = PercentageFeatureSet(st_seurat_ls[[samplename[i]]], pattern="^MT-")
+  st_seurat_ls[[samplename[i]]][["percent_rb"]] = PercentageFeatureSet(st_seurat_ls[[samplename[i]]], pattern="^RP[L|S]")
+  
+  rm(genes_keep, counts) # Clean env
+}
+
+rm(stoutfinal_fp) # Clean env
+
+# Merge data sets. Start with sample 1 as Seurat::merge merges two at a time
+st_seurat = st_seurat_ls[[1]]
+for(i in 2:length(samplename)){
+  sample_tmp = samplename[i]
+  st_seurat = merge(st_seurat, st_seurat_ls[[sample_tmp]], add.cell.ids=c('', sample_tmp))
+  rm(sample_tmp) # Clean env
+}
+rm(st_seurat_ls) # Clean env
+
+# Log-normalize data
+st_seurat = NormalizeData(st_seurat, verbose=F, assay="Spatial")
+st_seurat = FindVariableFeatures(st_seurat, verbose=F, assay="Spatial", nfeatures=3000)
+st_seurat = ScaleData(st_seurat, assay="Spatial", features=rownames(st_seurat), verbose=F)
+
+# Apply SCTransform to data
+seed_num = 12345
+st_seurat = SCTransform(st_seurat, assay="Spatial", verbose=F, return.only.var.genes=F, seed.use=seed_num)
+
+saveRDS(st_seurat, file='merged_seuratobjs_visium_log_and_sct_louvainclusters.RDS')
+```
+
+```{r include=F, eval=T}
+DefaultAssay(st_seurat) = "Spatial"
+st_seurat = RunPCA(st_seurat, verbose=F, assay='Spatial', seed.use=seed_num, reduction.name='pca_log')
+st_seurat = FindNeighbors(st_seurat, dims=1:50, assay='Spatial', verbose=F, reduction='pca_log')
+st_seurat = FindClusters(st_seurat, verbose=F, resolution=c(0.1, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4),
+                         random.seed=seed_num)
+st_seurat = RunUMAP(st_seurat, dims=1:50, assay='Spatial', seed.use=seed_num,
+                    reduction.name='umap_log', reduction='pca_log')
+
+DefaultAssay(st_seurat) = "SCT"
+st_seurat = RunPCA(st_seurat, verbose=F, assay='SCT', seed.use=seed_num,reduction.name='pca_sct')
+st_seurat = FindNeighbors(st_seurat, dims=1:50, assay='SCT', verbose=F, reduction='pca_sct')
+st_seurat = FindClusters(st_seurat, verbose=F, resolution=c(0.1, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4),
+                         random.seed=seed_num)
+st_seurat = RunUMAP(st_seurat, dims=1:50, assay='SCT', seed.use=seed_num, 
+                    reduction.name='umap_sct', reduction='pca_sct')
+
+saveRDS(st_seurat, file='../data/merged_seuratobjs_visium_log_and_sct_louvainclusters.RDS')
+```
+
+```{r include=F}
+# Save metadata information
+st_seurat@meta.data = st_seurat@meta.data %>%
+  mutate(tissue_type=case_when(orig.ident %in% c("sample1_MB14_A", "sample9_LMM_F", "sample10_MB17") ~ 'brain',
+                               orig.ident %in% c("sample4_LMM_A5", "sample14_LMM_B5", 
+                                                 "sample15_LMM_B6", "sample16_LMM_A4") ~ 'extra',
+                               TRUE ~ 'lmm')) %>%
+  mutate(patient=case_when(orig.ident %in% c("sample13_LMM_B1", "sample2_LMM_B2", "sample8_LMM_B3",
+                                             "sample12_LMM_B4", "sample14_LMM_B5", "sample15_LMM_B6") ~ 'pat_b',
+                           orig.ident %in% c("sample7_LMM_A1", "sample11_LMM_A2", "sample3_LMM_A3",
+                                             "sample16_LMM_A4", "sample4_LMM_A5") ~ 'pat_a',
+                           orig.ident %in% c("sample9_LMM_F") ~ 'pat_f',
+                           orig.ident %in% c("sample1_MB14_A", "sample6_MB14_B") ~ 'pat_mb14',
+                           orig.ident %in% c("sample5_MB16") ~ 'pat_mb16',
+                           orig.ident %in% c("sample10_MB17") ~ 'pat_mb17'))
+
+saveRDS(st_seurat, file='merged_seuratobjs_visium_log_and_sct_louvainclusters.RDS')
+```
+
+```{r include=F}
+# Read Seurat object
+st_seurat = readRDS('merged_seuratobjs_visium_log_and_sct_louvainclusters.RDS')
+```
+
+```{r echo=F}
+# Look at UMAP clusters
+p1 = list()
+DefaultAssay(st_seurat) = 'Spatial'
+for(i in c('orig.ident', 'patient', 'tissue_type', grep('Spatial_', colnames(st_seurat@meta.data), value=T))){
+  p1[[paste0('spatial_', i)]] = DimPlot(st_seurat, group.by=i, label=T, shuffle=T) + ggtitle(i)
+}
+DefaultAssay(st_seurat) = 'SCT'
+for(i in c('orig.ident', 'patient', 'tissue_type', grep('SCT_', colnames(st_seurat@meta.data), value=T))){
+  p1[[paste0('sct_', i)]] = DimPlot(st_seurat, group.by=i, label=T, shuffle=T) + ggtitle(i)
+}
+
+pdf('sct_log_umap_lmm_clustering.pdf', width=9, height=7)
+print(p1)
+dev.off()
+```
+
+```{r echo=F, fig.width=6, fig.height=4}
+# Plot gene expression within UMAP reduction
+DefaultAssay(st_seurat) = "SCT"
+FeaturePlot(st_seurat, features=c('MLANA', 'COL1A2', 'MS4A1', 'CD3E'), order=T)
+```
+
+```{r echo=F}
+# Plot clusters in spatial context
+SpatialDimPlot(st_seurat, images='sample8_LMM_B3', interactive=F, group.by='SCT_snn_res.0.8', image.alpha=0) +
+  guides(fill=guide_legend(ncol=2, byrow=TRUE))
+```
+
+```{r include=F, eval=F}
+# Find DE genes by comparing each cluster against all other clusters
+# Exclude mitochondrial and ribosomal genes
+
+# Detect DE genes using log-counts
+DefaultAssay(st_seurat) = "Spatial"
+genes_tmp = grep(pattern="^RP[L|S]|^MT-", rownames(st_seurat), invert=T, value=T)
+st_seurat_tmp = subset(st_seurat, features=genes_tmp)
+
+# Get cluster assignments that were generated from log-counts
+identities = grep('Spatial_snn', colnames(st_seurat_tmp@meta.data), value=T)
+log_degenes_list = list()
+for(id in identities){
+  Idents(st_seurat_tmp) = id
+  log_degenes_list[[id]] = FindAllMarkers(st_seurat_tmp, only.pos=T)
+}
+
+rm(genes_tmp, st_seurat_tmp, id) # Clean environment
+
+# Detect DE genes using SCT-counts
+DefaultAssay(st_seurat) = "SCT"
+genes_tmp = grep(pattern="^RP[L|S]|^MT-", rownames(st_seurat), invert=T, value=T)
+st_seurat_tmp = subset(st_seurat, features=genes_tmp)
+
+# Get cluster assignments that were generated from log-counts
+identities = grep('SCT_snn', colnames(st_seurat_tmp@meta.data), value=T)
+sct_degenes_list = list()
+for(id in identities){
+  Idents(st_seurat_tmp) = id
+  sct_degenes_list[[id]] = FindAllMarkers(st_seurat_tmp, only.pos=T)
+}
+
+rm(genes_tmp, st_seurat_tmp, id) # Clean environment
+
+# Save differentially expressed genes
+saveRDS(log_degenes_list, 'de_genes_merged_seuratobj_visium_log_louvainclusters.RDS')
+saveRDS(sct_degenes_list, 'de_genes_merged_seuratobj_visium_sct_louvainclusters.RDS')
+```
+

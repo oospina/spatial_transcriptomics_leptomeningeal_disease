@@ -245,9 +245,7 @@ for(i in samplenames){
   
   df_tmp = collapsed_dfs[[i]] %>%
     rownames_to_column(var='barcode') %>%
-    left_join(pos #%>%
-                #rownames_to_column(var='barcode')
-              , by='barcode') %>%
+    left_join(pos, by='barcode') %>%
     mutate(radius=13)
   
   spatial_prop_p[[i]] = ggplot() +
@@ -303,8 +301,7 @@ for(i in names(collapsed_dfs)){
   # Get coordinates
   pos = seuratobjs[[i]]@images[[i]]@coordinates %>%
     rownames_to_column(var='barcode') %>%
-    select(barcode, y=imagerow, x=imagecol) #%>%
-    #column_to_rownames(var='barcode')
+    select(barcode, y=imagerow, x=imagecol)
   
   # Create plot title
   plot_title = str_replace(i, '(?<=sample[0-9]{1,2})_', ': (') %>%
@@ -313,9 +310,7 @@ for(i in names(collapsed_dfs)){
   
   df_tmp = domain_props[[i]] %>%
     rownames_to_column(var='barcode') %>%
-    left_join(pos #%>%
-                #rownames_to_column(var='barcode')
-              , by='barcode') %>%
+    left_join(pos, by='barcode') %>%
     mutate(radius=10)
   
   domain_prop_p[[i]] = ggplot() +
