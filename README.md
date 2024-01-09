@@ -2,8 +2,8 @@
 
 This repository contains scripts associated with the pre-print manuscript entitled: *Spatial 
 transcriptomics analysis identifies a unique tumor-promoting function of the meningeal stroma in 
-melanoma leptomeningeal disease*. The manuscript can be accessed [here (bioRxiv)](https://www.biorxiv.org/content/10.1101/2023.12.18.572266v1).
-or [here (CellPress Sneak Peek)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4685391)
+melanoma leptomeningeal disease*. The manuscript pre-print can be accessed at [bioRxiv](https://www.biorxiv.org/content/10.1101/2023.12.18.572266v1)
+or [CellPress Sneak Peek](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4685391).
 Data used in this code is stored in the Gene Expression Omnibus (GEO) (accession number available
 upon publication). Whenever possible and/or relevant, intermediate or result files are 
 included in this repository. Unix and R code was contributed by Oscar Ospina.
