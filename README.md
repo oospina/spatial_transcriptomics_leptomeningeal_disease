@@ -12,7 +12,7 @@ The .fastq files from Illumina outputs were processed using [Space Ranger](https
 The [`Seurat`](https://satijalab.org/seurat/articles/spatial_vignette.html) package was used to 
 import and further process gene expression counts. Biological identification of the spots was 
 achieved using [`STdeconvolve`](https://jef.works/STdeconvolve/). Gene expression gradients (STgradient) and 
-spatial gene set enrichment analysis (STenrich) were conducted in [`spatialGE`](https://fridleylab.github.io/spatialGE/articles/spatial_enrichment_gradients_smi.html)
+spatial gene set enrichment analysis (STenrich) were conducted in [`spatialGE`](https://fridleylab.github.io/spatialGE/articles/spatial_enrichment_gradients_smi.html).
 
 ## `pre_processing`
 The `pre_processing` folder contains scripts to use `spaceranger mkfastq` in order to 
