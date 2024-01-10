@@ -1,0 +1,136 @@
+---
+title: "Spot deconvolution via GSEA"
+---
+
+```{r include=F, echo=F}
+# Load library
+library('tidyverse')
+library('STdeconvolve')
+```
+
+```{r include=F, eval=F}
+# Load Seurat objects to coordinate data
+seuratobjs = readRDS('[NAMED_LIST_SEURAT_OBJECTS]')
+
+# Set cell types to deconvolve
+celltypes = c(
+  "Astrocytes", "B-cells", "CD4+ T-cells", "CD8+ T-cells", "Chondrocytes", "DC", 
+  "Endothelial cells", 
+  "Epithelial cells", "Erythrocytes", "Fibroblasts",
+  "Macrophages", "Melanocytes",
+  "Monocytes",
+  "Neurons", "Neutrophils", "NK cells", "Pericytes", "Skeletal muscle", "Smooth muscle"    
+)
+
+# Get marker genes from BluePrint
+bp = celldex::BlueprintEncodeData()
+bp = bp[, bp$label.main %in% celltypes]
+bp_mtx = assay(bp)
+bp_celltype = colData(bp)$label.main %>%
+  gsub('[ -]+', '_', .) %>%
+  gsub('\\+', '', .) %>%
+  tolower()
+
+# Make color palette
+col_pal = khroma::color('smoothrainbow')(length(unique(bp_celltype)))
+names(col_pal) = unique(bp_celltype)
+# Change specifc color assignments
+names(col_pal)[17] = 'melanocytes'
+names(col_pal)[15] = 'neurons'
+
+rm(bp, celltypes)
+```
+
+```{r include=F}
+# Clean environment except the Seurat object
+rm(list=grep('seuratobjs|bp_celltype|bp_mtx|col_pal', ls(), value=T, invert=T))
+```
+
+```{r include=F}
+# Proxy theta for the annotated cells
+celltype_theta = model.matrix(~ 0 + bp_celltype)
+# Clean design matrix names
+colnames(celltype_theta) = gsub('bp_celltype', '', colnames(celltype_theta))
+
+# Add library (fine res cell type) names
+rownames(celltype_theta) = colnames(bp_mtx)
+```
+
+```{r}
+# Check that order of fine resolution types is the same between matrices
+all.equal(colnames(bp_mtx), rownames(celltype_theta))
+```
+
+```{r include=F}
+# "weight" expression data by cell type
+# This is intended to make expression differences more pronounced
+celltype_gexp = bp_mtx %*% celltype_theta
+```
+
+```{r echo=F}
+# Look at expression of a marker by cell type
+test = t(celltype_gexp) %>%
+  as.data.frame() %>%
+  rownames_to_column(var='cell_type') 
+
+ggplot(test, aes(x=cell_type, y=TYR, fill=cell_type)) +
+  geom_col() + 
+  scale_fill_manual(values=col_pal) +
+  theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1))
+```
+
+```{r include=F}
+celltype_markers = list()
+celltype_gexp = t(as.matrix(celltype_gexp))
+for(i in rownames(celltype_gexp)){
+  # Select genes expressed over the 9th percentile of all expression values
+  highgexp = names(which(celltype_gexp[i, ] > quantile(celltype_gexp[i, ], probs=0.75)))
+  # Calculate log2(fold-change) compared to other cell types and limit to top 200
+  idx = which(rownames(celltype_gexp) == i)
+  expr_celltype = celltype_gexp[idx, highgexp]
+  expr_others = colMeans(celltype_gexp[-idx, highgexp])
+  log2fc = sort(expr_celltype/expr_others, decreasing=TRUE)[1:200]
+  
+  # Select log2FC > 1 (i.e., FC > 2 over the mean exp of the other cell types)
+  markers = names(log2fc[log2fc > 1])
+  markers = as.vector(na.omit(markers))
+  celltype_markers[[i]] = markers
+}
+
+rm(highgexp, log2fc, markers)
+```
+
+```{r include=F, message=F}
+seed_num = 12345
+lda_fps = list.files('.', pattern='selected_lda_model.RDS', full.names=T)
+for(i in names(seuratobjs)[11:16]){
+  # Read results of deconvolution (i.e., topic expression)
+  fp = grep(i, lda_fps, value=T)
+  results = readRDS(fp)
+  
+  # Get coordinate data for pie charts
+  pos = seuratobjs[[i]]@images[[i]]@coordinates %>%
+    select(y=imagerow, x=imagecol)
+  
+  set.seed(seed_num)
+  # Apply GSEA to topics
+  celltype_annotations = annotateCellTypesGSEA(beta=results$beta, 
+                                               gset=celltype_markers, qval=0.05)
+  
+  # Change NAs to 'unknown'
+  celltype_annotations$predictions[is.na(celltype_annotations$predictions)] = 'unknown'
+  celltype_annotations$predictions = paste0('t', 
+                                            rep(1:length(celltype_annotations$predictions)),
+                                            '_', celltype_annotations$predictions)
+  
+  # Assign cell names instead of topics
+  deconPropCellnames = results$theta
+  colnames(deconPropCellnames) = celltype_annotations$predictions
+  
+  fp = paste0(i, '/', i, '_deconv_matrix_w_gsea_cellnames.csv')
+  write.csv(as.data.frame(deconPropCellnames) %>% 
+              rownames_to_column(var='gene'), file=fp, row.names=F, quote=F)
+  
+  rm(fp) # Clean env
+}
+```

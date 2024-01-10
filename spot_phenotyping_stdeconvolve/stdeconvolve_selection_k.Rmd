@@ -1,0 +1,138 @@
+---
+title: "Selection of most likely K and identification of marker genes per topic"
+---
+
+```{r include=F, echo=F}
+# Load library
+# Code adapted from STdeconvolve tutorial
+library('tidyverse')
+library('Seurat')
+library('STdeconvolve')
+library('ggrepel')
+```
+
+```{r include=F, eval=F}
+# Load Seurat objects to extract variable genes
+seuratobjs = readRDS('[NAMED_LIST_SEURAT_OBJECTS]')
+```
+
+```{r include=F}
+# Clean environment except the Seurat object
+rm(list=grep('seuratobjs', ls(), value=T, invert=T))
+```
+
+```{r include=F}
+# Each sample is processed one at a time
+# SAMPLE TO PROCESS (sample number as in sampleX):
+sample = 1
+# Specify "best K" after analysis of LDA metrics plot (perplexity and % rare topics)
+selected_k = 13
+```
+
+```{r include=F}
+# Find LDS results
+lda_fp = list.files('.', full.names=T,  pattern='lda_model_results.RDS') %>%
+  grep(paste0('sample', sample, '_'), ., value=T)
+
+# Extract sample names
+samplename = str_extract(lda_fp, paste0('sample[0-9]{1,2}_[_A-Z0-9]+')) %>%
+  gsub('_$', '', .)
+
+rm(sample) # Clean environment
+```
+
+```{r include=F}
+# Read LDA results
+ldas = readRDS(lda_fp)
+
+# Extract counts and coordinates from Seurat object
+pos = seuratobjs[[samplename]]@images[[samplename]]@coordinates %>%
+  select(y=imagerow, x=imagecol)
+```
+
+```{r include=F, message=F}
+# Get the optimal LDA model
+# To select optiomal K, look at the LDA metric plots generated during LDA fitting
+#optLDA = optimalModel(models=ldas, opt='min')
+optLDA = optimalModel(models=ldas, opt=selected_k)
+
+results = getBetaTheta(optLDA, perc.filt=0.05, betaScale=1000)
+deconProp = results$theta
+deconGexp = results$beta
+
+saveRDS(results, file=paste0(samplename, '_selected_lda_model.RDS'))
+```
+
+```{r include=F}
+# Plot topic proportions separately
+ps = lapply(colnames(deconProp), function(celltype) {
+  vizTopic(theta=deconProp, pos=pos, topic=celltype, plotTitle=paste0("Topic_", celltype),
+           size=2, stroke=0.05, alpha=0.7,
+           low = "white",
+           high = "red") +
+    ## remove the pixel "Groups", which is the color aesthetic for the pixel borders
+    ggplot2::guides(colour="none") + 
+    scale_y_reverse()
+})
+
+pdf(file=paste0(samplename, '/', samplename, '_topic_proportions_separated.pdf'), height=10, width=10)
+ggpubr::ggarrange(plotlist=ps, ncol=2, nrow=2)
+dev.off()
+```
+
+```{r include=F, warning=F}
+# Find gene markers defined as those with highest log-fold change per topic from
+# the comparison of a given topic to the others' average
+ps = list(logfold=NULL, plots=NULL)
+for(celltype in colnames(deconProp)){
+  celltype = as.numeric(celltype)
+  ## highly expressed in cell-type of interest
+  highgexp = names(which(deconGexp[celltype,] > 1))
+  ## high log2(fold-change) compared to other deconvolved cell-types
+  log2fc = sort(
+    log2(deconGexp[celltype,highgexp]/colMeans(deconGexp[-celltype, highgexp])), 
+    decreasing=TRUE)
+  
+  ## visualize the transcriptional profile
+  dat = data.frame(values=as.vector(log2fc), genes=names(log2fc), order=seq(length(log2fc)))
+  # If there are more than 30 genes identified as markers, then select the top 15 and bottom 15
+  if(nrow(dat) > 30){
+    dat_top = rbind(dat[1:15, ], dat[(nrow(dat)-14):nrow(dat), ])
+    # Rea assign order of genes (as given by logFC)
+    dat_top$order = seq(nrow(dat_top))
+  } else{
+    dat_top = dat
+  }
+  # Assign color to genes for plotting
+  dat_top = dat_top %>%
+    mutate(col=case_when(values < 0 ~ 'Up',
+                         values > 0 ~ 'Down',
+                         TRUE ~ 'black'))
+  
+  ps[['plots']][[paste0('topic_', celltype)]] = ggplot(data=dat_top) +
+    geom_point(aes(x=order, y=values, color=col)) +
+    geom_hline(yintercept=0, linetype="dashed") +
+    scale_y_continuous(expand=c(0, 0), limits=c(min(log2fc)-0.3, max(log2fc)+0.3)) +
+    labs(title=paste0("Topic_", celltype),
+         x="Gene expression rank",
+         y="log2(FC)") +
+    geom_text_repel(ggplot2::aes(x=order, y=values, label=genes), max.overlaps=20) +
+    theme_classic() +
+    theme(
+      plot.title=element_text(size=15, face="bold"),
+      legend.position='none'
+    ) +
+    ylim((min(dat$value)-0.5), (max(dat$value)+0.5)) +
+    scale_color_manual(values=c('blue', 'red'))
+  
+  ps[['logfold']][[paste0('topic_', celltype)]] = dat
+}
+```
+
+```{r include=F}
+openxlsx::write.xlsx(ps$logfold, file=paste0(samplename, '/', samplename, '_logfold_change_topics.xlsx'))
+
+pdf(file=paste0(samplename, '/', samplename, '_top_logfold_change_topics.pdf'), height=10, width=10)
+ggpubr::ggarrange(plotlist=ps$plots, ncol=2, nrow=2)
+dev.off()
+```

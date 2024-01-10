@@ -1,0 +1,137 @@
+---
+title: "Model fitting to find most likely K with STdeconvolve"
+---
+
+```{r include=F, echo=F}
+# Load library
+# Code adapted from STdeconvolve tutorial
+library('tidyverse')
+library('Seurat')
+library('STdeconvolve')
+library('ggthemes')
+```
+
+```{r include=F, eval=F}
+# Load Seurat objects to extract variable genes
+seuratobjs = readRDS('[NAMED_LIST_SEURAT_OBJECTS]')
+```
+
+```{r include=F}
+# Clean environment except the Seurat object
+rm(list=grep('seuratobjs', ls(), value=T, invert=T))
+```
+
+```{r include=F}
+# Each sample is processed one at a time
+# SAMPLE TO PROCESS (sample number as in sampleX):
+i = 1
+```
+
+```{r include=F}
+# Extract counts and coordinates from Seurat object
+samplename = grep(paste0('sample', i, '_'), names(seuratobjs), value=T)
+cd = GetAssayData(seuratobjs[[samplename]], assay='Spatial', slot='counts')
+pos = seuratobjs[[samplename]]@images[[samplename]]@coordinates %>%
+  select(y=imagerow, x=imagecol)
+```
+
+```{r include=F}
+# Remove mitochondira/ribosomal genes from corpus
+keepgenes = rownames(cd)[!grepl("^MT-|^RP[L|S]", rownames(cd))]
+cd = cd[keepgenes, ]
+
+rm(keepgenes) # Clean environment
+```
+
+```{r include=F}
+# Filter genes with low counts
+counts = cleanCounts(cd, min.reads=10)
+
+# Extract variable genes from Seurat objects
+DefaultAssay(seuratobjs[[samplename]]) = 'Spatial'
+vargenes = VariableFeatures(seuratobjs[[samplename]])
+vargenes = rownames(counts)[rownames(counts) %in% vargenes]
+
+rm(cd) # Clean environment
+```
+
+```{r echo=F}
+counts = as.data.frame(t(as.matrix(counts)))
+counts = counts[, colnames(counts) %in% vargenes]
+counts = as.matrix(counts)
+corpus = preprocess(dat=counts, min.detected=1, ODgenes=F, plot=T)
+
+rm(vargenes) # Clean environment
+```
+
+```{r warning=F, eval=T}
+ldas = fitLDA(as.matrix(corpus$corpus), Ks=c(3:15), 
+              ncores=parallel::detectCores(logical=T)-1, verbose=F)
+
+# Save model results
+saveRDS(ldas, file=paste0('../data/', samplename, '_lda_model_results.RDS'))
+```
+
+```{r include=F}
+ldas = readRDS(file=paste0(samplename, '_lda_model_results.RDS'))
+```
+
+```{r echo=F}
+# Plot LDA model selection metrics
+model_alphas = c()
+for(i in names(ldas$models)){
+  model_alphas = append(model_alphas, ldas$models[[i]]@alpha)
+}
+metrics_df = tibble(k=as.numeric(names(ldas$models)),
+                    alpha=model_alphas,
+                    perplexity=ldas$perplexities,
+                    scaled_perplexity=scales::rescale(ldas$perplexities, to = c(0, 15)),
+                    rare_types=ldas$numRare)
+
+col_alpha=c()
+for(i in metrics_df$alpha){
+  if(i > 1){
+    col_alpha=append(col_alpha, 'orange')
+  } else{
+    col_alpha=append(col_alpha, 'gray50')
+  }
+}
+
+p = ggplot(metrics_df) +
+  geom_line(aes(x=k, y=rare_types), col='blue') +
+  geom_line(aes(x=k, y=scaled_perplexity), col='red') +
+  geom_text(aes(x=k, y=-1, label=sprintf('%.2f', alpha)), angle=45, size=4, col=col_alpha) +
+  xlab('Topics (Predicted cell types)') + 
+  scale_y_continuous('Cell types with prop. spots < 0.05',
+                     breaks=seq(-1, 15),
+                     labels=c('Model\nAlphas', 0:15),
+                     sec.axis=sec_axis(~., name="Perplexity",
+                                       breaks=seq(0, max(metrics_df$k)),
+                                       labels=sprintf(
+                                         '%.1f', seq(
+                                           min(metrics_df$perplexity),
+                                           max(metrics_df$perplexity),
+                                           length.out=max(metrics_df$k)+1)))) +
+  scale_x_continuous(breaks=as.numeric(names(ldas$models))) +
+  ggtitle(paste0(
+    samplename,  ' - ', 
+    "LDA model metrics<br>
+    <span style='color: blue;'>Rare (<5% spots) cell types</span><br>
+    <span style='color: red;'>Model perplexity</span><br>
+    Model alpha: (
+    <span style='color: gray50;'>a<1</span> | 
+    <span style='color: orange;'>a>1</span>
+    )")) +
+  theme_base() +
+  theme(axis.title.y.left=ggplot2::element_text(color="blue", size=13),
+        axis.text.y.left=element_text(color=c('gray50', rep('blue', 16))),
+        axis.title.y.right=ggplot2::element_text(color="red", size=13),
+        axis.text.y.right=element_text(color='red'),
+        axis.ticks.y.left=element_line(color=c('white', rep("black", 16))),
+        plot.title=ggtext::element_markdown(size=10))
+
+dir.create(samplename, recursive=T)
+ggsave(paste0(samplename, '/', samplename, '_lda_model_metrics.pdf'))
+
+rm(col_alpha, metrics_df, p) # Clean env
+```
