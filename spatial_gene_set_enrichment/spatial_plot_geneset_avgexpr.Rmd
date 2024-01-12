@@ -1,0 +1,174 @@
+---
+title: "Plots of pathway average gene expression (for significant STenrich tests)"
+---
+
+```{r include=F}
+library('tidyverse')
+library('Seurat')
+library('msigdbr')
+```
+
+```{r include=F}
+# Read Seurat objects to obtain coordinates
+seurat_fp = '[NAMED_LIST_SEURAT_OBJECTS]'
+seurat_objs = readRDS(seurat_fp)
+
+rm(seurat_fp) # Clean environment
+```
+
+```{r include=F}
+# List files with p-values and expression values 
+fps = list.files('./gene_set_spatial_analysis_hpcrun/', pattern="all_spots_minspots_", full.names=T)
+
+stenrich_res = list()
+for(fp in fps){
+  test_name = gsub("[\\.\\/_a-z]+all_spots_", '', fp) %>% gsub("_pathway_tests.xlsx", "", .)
+
+  stenrich_res[[test_name]] = list()
+  for(i in names(seurat_objs)){
+    stenrich_res[[test_name]][[i]] = readxl::read_excel(fp, sheet=i) %>%
+      rename(!!paste0('adj_p_value_', i) := adj_p_value) %>%
+      mutate(!!paste0('prop_geneset_', i) := size_test/size_gene_set) %>%
+      select(-c('sample_name', 'size_test', 'size_gene_set', 'p_value')) %>%
+      select(c("gene_set", !!paste0('prop_geneset_', i), !!paste0('adj_p_value_', i)))
+  }
+  stenrich_res[[test_name]] = stenrich_res[[test_name]] %>%
+    Reduce(function(dtf1, dtf2) left_join(dtf1, dtf2, by="gene_set"), .)
+  
+  adj_p_val_mask = rowSums(stenrich_res[[test_name]][, grep('adj_p_value_', colnames(stenrich_res[[test_name]]))] < 0.05, na.rm=T)
+  setsize_mask = rowSums(stenrich_res[[test_name]][, grep('prop_geneset_', colnames(stenrich_res[[test_name]]))] >= 0.25, na.rm=T)
+  df_mask = tibble(adj_p_val=adj_p_val_mask, setsize=setsize_mask)
+  df_mask = df_mask[['adj_p_val']] >= 1 & df_mask[['setsize']] >= 1
+  
+  stenrich_res[[test_name]] = stenrich_res[[test_name]][df_mask, ]
+  
+  rm(test_name, adj_p_val_mask, setsize_mask, df_mask) # Clean environment
+}
+
+rm(fps) # Clean environment
+```
+
+```{r include=F, eval=F}
+# Get gene sets for biological processes
+dbases = msigdbr(species='Homo sapiens')
+gene_sets = filter(dbases, gs_subcat == "CP:KEGG") %>% 
+  split(x=.$gene_symbol, f=.$gs_name) %>%
+  append(., filter(dbases, gs_subcat == "GO:BP") %>% 
+           split(x=.$gene_symbol, f=.$gs_name))
+
+rm(dbases) # Clean environment
+```
+
+```{r include=F, eval=F}
+# Extract counts and coordinates from seurat objects
+tr_cts = list()
+coords = list()
+for(i in names(seurat_objs)){
+  tr_cts[[i]] = as.matrix(GetAssayData(seurat_objs[[i]], assay='Spatial', slot='data'))
+  coords[[i]] = seurat_objs[[i]]@images[[i]]@coordinates
+}
+
+# Calculate average gene set expression
+avg_expr = list()
+# Loop through experiments
+for(test in names(stenrich_res)){
+  avg_expr[[test]] = list()
+  # Loop through samples
+  for(i in names(tr_cts)){
+    # Loop through gene sets
+    avg_expr[[test]][[i]] = list()
+    for(set in stenrich_res[[test]][['gene_set']]){
+      if(any(rownames(tr_cts[[i]]) %in% gene_sets[[set]])){
+        # Get averaged expression
+        avg_expr[[test]][[i]][[set]] = as.data.frame(
+          t(data.frame(colMeans(tr_cts[[i]][rownames(tr_cts[[i]]) %in% gene_sets[[set]], , drop=F]))))
+        rownames(avg_expr[[test]][[i]][[set]]) = set
+      }
+    }
+    # Make data frame from lots of averaged expression
+    avg_expr[[test]][[i]] = dplyr::bind_rows(avg_expr[[test]][[i]])
+
+    # Merge coordinate data
+    avg_expr[[test]][[i]] = as.data.frame(t(avg_expr[[test]][[i]])) %>%
+      tibble::rownames_to_column(var='barcode') %>%
+      dplyr::left_join(coords[[i]] %>%
+                         rownames_to_column(var='barcode') %>%
+                         dplyr::select(barcode, xpos=imagecol, ypos=imagerow), ., by='barcode')
+  }
+}
+
+rm(tr_cts, coords) # Clean environment
+
+# Save averaged gene set expression (takes a while to compute)
+saveRDS(avg_expr, '../data/avg_geneset_expr.RDS')
+```
+
+```{r include=F}
+# Read averaged gene set expression generated in previous step
+avg_expr = readRDS('../data/avg_geneset_expr.RDS')
+```
+
+```{r include=F, message=F}
+# Create plots for KEGG pathways
+# Loop through each experiment
+for (test in grep('_kegg$', names(avg_expr), value=T)){
+  num_sds = str_extract(test, 'sd_1_|sd_1.5_') %>% str_extract(., '1_|1.5_') %>% 
+    gsub('_', '', .) %>% as.numeric()
+  # Loop though each sample
+  for(i in names(avg_expr[[test]])){
+    qp = list()
+    # Loop through gene sets
+    gene_sets = colnames(avg_expr[[test]][[i]] %>% select(-barcode, -xpos, -ypos))
+    for(set in gene_sets){
+      # Extract relevant data frame
+      df_tmp = avg_expr[[test]][[i]] %>%
+        dplyr::select(xpos, ypos, values := !!set)
+      
+      # Find spots that highly express this pathway (mean + stdev_t*std in this case)
+      avg = mean(df_tmp[['values']])
+      std = sd(df_tmp[['values']])
+      exp_thresh = avg + (num_sds*std)
+      
+      df_tmp = df_tmp %>%
+        mutate(above_thr=case_when(values >= exp_thresh ~ 'above',
+                                   TRUE ~ 'under')) %>% # Classify spots as above or under threshold
+        mutate(values=as.vector(scale(.[['values']]))) # Scale expresion values
+      
+      # Split gene set name if too long
+      if(nchar(set) > 50){
+        title_set = set
+        stringi::stri_sub(title_set, 51, 50) = '\n'
+      } else{
+        title_set = set
+      }
+      
+      title_res = paste0('Proportion of pathway genes=',
+                         round(unlist(stenrich_res[[test]][stenrich_res[[test]][['gene_set']] == set, paste0('prop_geneset_', i)]), 2),
+                         '; Adjusted p-value=',
+                         round(unlist(stenrich_res[[test]][stenrich_res[[test]][['gene_set']] == set, paste0('adj_p_value_', i)]), 4))
+      
+      # Make plot
+      qp[[set]] = ggplot(df_tmp) +
+        geom_point(aes(x=xpos, y=ypos, color=values, shape=above_thr)) +
+        ggtitle(paste0(i, '\n', title_set, '\n', title_res)) +
+        labs(color='Average\ngene set\nexpression', shape='Expression\nthreshold') +
+        khroma::scale_color_BuRd() +
+        scale_shape_manual(values=c(under=16, above=17),
+                           labels=c('Below', 'Above')) +
+        guides(shape=guide_legend(override.aes=list(size=3))) +
+        scale_y_reverse() +
+        coord_equal() +
+        theme_void() +
+        theme(plot.title=element_text(size=9))
+      
+      rm(avg, std, exp_thresh) # Clean environment
+    }
+    pdf(paste0('stenrich_signif_0.05_geneset_expr_', test, '_', i, '.pdf'), width=10, height=10)
+    print(
+      ggpubr::ggarrange(plotlist=qp, nrow=2, ncol=2)
+    )
+    dev.off()
+  }
+}
+```
+

@@ -1,0 +1,236 @@
+---
+title: "Summary of STenrich experiments applied to LMM Visium data"
+---
+
+```{r include=F, message=F}
+library('tidyverse')
+library('ComplexHeatmap')
+```
+
+```{r include=F}
+# Compile all results in a single data frame
+# Get result files
+fp = './gene_set_spatial_analysis_hpcrun/'
+fps = list.files(fp, pattern='_pathway_tests.xlsx', full.names=T)
+
+rm(fp) # Clean env
+
+# Loop through files
+stenrich_res = list()
+for(i in 1:length(fps)){
+  fp = fps[i]
+  samples = readxl::excel_sheets(fp)
+  for(samplename in samples){
+    stenrich_res[[paste0(samplename, '_', i)]] = readxl::read_excel(fp, sheet=samplename) %>%
+      add_column(expmt=str_replace(fp, '[_\\.\\/a-z]+all_spots_', '') %>%
+                   str_replace(., '_tests\\.xlsx', ''))
+  }
+  rm(fp, samples) # Clean env
+}
+# Combine all data frames
+all_res = do.call(bind_rows, stenrich_res)
+
+rm(stenrich_res, fps) # Clean environment
+```
+
+```{r include=F}
+# Split experiment arguments
+all_res = all_res %>%
+  mutate(min_spots=str_extract(expmt, 'minspots_[0-9]+')) %>%
+  mutate(sd_thr=str_extract(expmt, 'sd_[\\.0-9]+')) %>%
+  mutate(dbase=str_extract(expmt, 'kegg|go'))
+```
+
+```{r echo=F}
+# Plot log10 p-values
+# Specify sample to plot
+samplename = "sample8_LMM_B3"
+
+# Specify experiments to plot
+expmt_x = 'minspots_10_sd_1_kegg_pathway'
+expmt_y = 'minspots_20_sd_1_kegg_pathway'
+
+# Create data frame with data to plot
+df_tmp = all_res %>%
+  filter(sample_name == samplename) %>% 
+  filter(expmt == expmt_x | expmt == expmt_y) %>%
+  pivot_wider(gene_set, names_from='expmt', values_from='adj_p_value') %>%
+  mutate(expmt_x := log10(.[[expmt_x]]) * -1) %>%
+  mutate(expmt_y := log10(.[[expmt_y]]) * -1)
+
+# Make plot
+plotly::ggplotly(
+  ggplot(df_tmp) +
+    geom_point(aes(x=expmt_x, y=expmt_y, label=gene_set), size=0.5) +
+    geom_abline(slope=1) +
+    xlab(expmt_x) +
+    ylab(expmt_y) +
+    ggtitle(paste0('-log10(p_val) - ', samplename)) +
+    #coord_equal() +
+    theme(panel.border=element_rect(color='black', fill=NA))
+)
+```
+
+```{r include=F}
+# Create annotations
+slide_ann = tibble(samplename=unique(all_res$sample_name)) %>%
+  mutate(tissue=case_when(samplename %in% c("sample2_LMM_B2", "sample7_LMM_A1", "sample8_LMM_B3", 
+                                            "sample12_LMM_B4", "sample13_LMM_B1") ~ 'lmm',
+                          samplename %in% c("sample4_LMM_A5", "sample14_LMM_B5", "sample15_LMM_B6", 
+                                            "sample16_LMM_A4") ~ 'extra_cns')) %>%
+  mutate(patient=case_when(samplename %in% c("sample7_LMM_A1", "sample16_LMM_A4", "sample4_LMM_A5") ~ 'PatA',
+                           samplename %in% c("sample13_LMM_B1", "sample2_LMM_B2", "sample8_LMM_B3",
+                                             "sample12_LMM_B4", "sample14_LMM_B5", "sample15_LMM_B6") ~ 'PatB')) %>%
+  add_column(sample_id=.[['samplename']])
+```
+
+```{r include=F}
+# Create color palettes
+col_tissue = as.vector(khroma::color('highcontrast')(length(unique(slide_ann$tissue))))
+names(col_tissue) = unique(unique(slide_ann$tissue))
+col_sample = as.vector(khroma::color('discreterainbow')(length(unique(slide_ann$samplename))))
+names(col_sample) = c("sample4_LMM_A5", "sample14_LMM_B5", "sample15_LMM_B6",
+                      "sample2_LMM_B2", "sample7_LMM_A1", "sample8_LMM_B3", 
+                      "sample12_LMM_B4", "sample13_LMM_B1","sample16_LMM_A4")
+col_pat = as.vector(khroma::color('pale')(length(unique(slide_ann$patient))))
+names(col_pat) = unique(slide_ann$patient)
+```
+
+```{r echo=F}
+khroma::plot_scheme(col_tissue, names=T)
+khroma::plot_scheme(col_sample, names=T)
+khroma::plot_scheme(col_pat, names=T)
+```
+
+```{r echo=F}
+# Create heatmap of p-values for KEGG pathways
+expmt = 'minspots_20_sd_1_kegg_pathway'
+
+# Create matrix with p-values matching heatmap and save to file
+pval_mtx = all_res %>%
+  filter(expmt == !!expmt) %>%
+  mutate(test_available=case_when(is.na(adj_p_value) ~ 'no_test', TRUE ~ 'test_available')) %>%
+  filter(test_available != 'no_test') %>%
+  select('sample_name', 'gene_set', 'adj_p_value') %>%
+  pivot_wider(names_from='sample_name', values_from='adj_p_value')
+
+openxlsx::write.xlsx(pval_mtx, paste0('../results/', expmt, '_summary_adjpval.xlsx'))
+rm(pval_mtx) # Clean env
+
+# Create yes/no significant matrix for heatmap
+hm_mtx = all_res %>%
+  filter(expmt == !!expmt) %>%
+  mutate(significant=case_when(adj_p_value < 0.05 ~ 'yes',
+                               adj_p_value >= 0.05 ~ 'no',
+                               is.na(adj_p_value) ~ 'no_test',
+                               TRUE ~ 'other')) %>%
+  filter(significant != 'no_test') %>%
+  select(sample_name, gene_set, significant) %>%
+  pivot_wider(names_from='sample_name', values_from='significant') %>%
+  column_to_rownames(var='gene_set')
+
+# Order according to number of significant p-values
+hm_mtx = hm_mtx[order(rowSums(hm_mtx == 'yes'), decreasing=T), ]
+
+# Create data frame for heatmap annotations
+slide_ann_order_tmp = slide_ann %>%
+  arrange(tissue, patient) %>%
+  select(samplename, sample_id, tissue, patient) %>%
+  filter(samplename %in% colnames(hm_mtx)) %>%
+  column_to_rownames(var='sample_id')
+
+col_annots = HeatmapAnnotation(df=slide_ann_order_tmp, 
+                               col=list(samplename=col_sample,
+                                        tissue=col_tissue,
+                                        patient=col_pat))
+
+# Create color palette for values within heatmap
+hm_col = structure(c('gray40', 'blue'), names=c('no', 'yes'))
+
+pdf(paste0(expmt, '_summary_adjpval.pdf'), height=25, width=15)
+print(
+  Heatmap(hm_mtx[, match(rownames(slide_ann_order_tmp), colnames(hm_mtx))],
+          bottom_annotation=col_annots,
+          show_column_names=F,
+          show_row_names=T,
+          cluster_columns=F, 
+          cluster_rows=F,
+          col=hm_col,
+          heatmap_legend_param=list(title="pval<0.05"),
+          column_title=expmt,
+          row_names_side="left",
+          row_names_max_width=unit(15, 'cm'))
+)
+dev.off()
+
+rm(slide_ann_order_tmp) # Clean environment
+
+hm1
+```
+
+```{r echo=F}
+# Create heatmap of p-values for GO pathways
+expmt = 'minspots_20_sd_1_go_pathway'
+
+# Create matrix with p-values matching heatmap and save to file
+pval_mtx = all_res %>%
+  filter(expmt == !!expmt) %>%
+  mutate(test_available=case_when(is.na(adj_p_value) ~ 'no_test', TRUE ~ 'test_available')) %>%
+  filter(test_available != 'no_test') %>%
+  select('sample_name', 'gene_set', 'adj_p_value') %>%
+  pivot_wider(names_from='sample_name', values_from='adj_p_value')
+
+openxlsx::write.xlsx(pval_mtx, paste0('../results/', expmt, '_summary_adjpval.xlsx'))
+rm(pval_mtx) # Clean env
+
+# Create yes/no significant matrix for heatmap
+hm_mtx = all_res %>%
+  filter(expmt == !!expmt) %>%
+  mutate(significant=case_when(adj_p_value < 0.001 ~ 'yes',
+                               adj_p_value >= 0.001 ~ 'no',
+                               is.na(adj_p_value) ~ 'no_test',
+                               TRUE ~ 'other')) %>%
+  filter(significant != 'no_test') %>%
+  select(sample_name, gene_set, significant) %>%
+  pivot_wider(names_from='sample_name', values_from='significant') %>%
+  column_to_rownames(var='gene_set')
+
+# Order according to number of significant p-values
+hm_mtx = hm_mtx[order(rowSums(hm_mtx == 'yes'), decreasing=T), ]
+
+# Create data frame for heatmap annotations
+slide_ann_order_tmp = slide_ann %>%
+  arrange(tissue, patient) %>%
+  select(samplename, sample_id, tissue, patient) %>%
+  filter(samplename %in% colnames(hm_mtx)) %>%
+  column_to_rownames(var='sample_id')
+
+col_annots = HeatmapAnnotation(df=slide_ann_order_tmp, 
+                               col=list(samplename=col_sample,
+                                        tissue=col_tissue,
+                                        patient=col_pat))
+
+# Create color palette for values within heatmap
+hm_col = structure(c('gray40', 'blue'), names=c('no', 'yes'))
+
+pdf(paste0(expmt, '_summary_adjpval.pdf'), height=25, width=15)
+print(
+  Heatmap(hm_mtx[, match(rownames(slide_ann_order_tmp), colnames(hm_mtx))],
+          bottom_annotation=col_annots,
+          show_column_names=F,
+          show_row_names=T,
+          cluster_columns=F, 
+          cluster_rows=F,
+          col=hm_col,
+          heatmap_legend_param=list(title="pval<0.05"),
+          column_title=expmt,
+          row_names_side="left",
+          row_names_max_width=unit(15, 'cm'))
+)
+dev.off()
+
+rm(slide_ann_order_tmp) # Clean environment
+
+hm1
+```
+

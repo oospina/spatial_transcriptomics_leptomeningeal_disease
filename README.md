@@ -38,7 +38,8 @@ identified.
 * `unsupervised_clustering/unsuperv_cluster_separate.Rmd`: A pipeline to read Space Ranger outputs and 
 create a Seurat object for each sample, resulting in a named list of seurat objects. Both 
 log-transformed and SCT-transformed data are generated. Louvain clusters are identified for each sample.
-The named list containing Seurat objects is used in downstream analyses (e.g., spot phenoytyping).
+The named list containing Seurat objects is used in downstream analyses (e.g., spot phenoytyping), and
+is referenced as '[NAMED_LIST_SEURAT_OBJECTS]' in the scripts.
 
 ## `spot_phenotyping_stdeconvolve`
 The `spot_phenotyping_stdeconvolve` folder contains code to fit Latent Dirichlet Allocation (LDA)
@@ -53,6 +54,24 @@ done one sample at a time.
 * `spot_phenotyping_stdeconvolve/gsea_topic_deconvolution.Rmd`: Code to automatically assign 
 biological identities to the topics using GSEA. The results are manually curated after inspecting
 log-fold changes of key genes in each topic (see `manuscript_figures`).
+
+## `spatial_gene_set_enrichment`
+The `spatial_gene_set_enrichment` folder contains code to conduct spatial gene set enrichment
+using the STenrich algorithm. Details about the STenrich algorithm can be found [here](https://fridleylab.github.io/spatialGE/articles/spatial_enrichment_gradients_smi.html).
+The code was written to be used in a high performance computing (HPC) environment, however, 
+interested readers can also run the STenrich algorithm using the function implemented in spatialGE.
+* `spatial_gene_set_enrichment/gene_set_spatial_analysis_hpcrun/run_kegg_pathway_spatial_enrichment_tests_minunits_20_numsds_1.sh`:
+A Slurm script to submit a run of the `kegg_pathway_spatial_enrichment_tests.R` script to an
+HPC environment. A similar script is provided to run STenrich using GO gene sets. Note: The 
+STenrich algorithm can also be executed on a regular computer, using [spatialGE](https://fridleylab.github.io/spatialGE/articles/spatial_enrichment_gradients_smi.html).
+* `spatial_gene_set_enrichment/gene_set_spatial_analysis_hpcrun/kegg_pathway_spatial_enrichment_tests.R`
+An R script that executes the STenrich algorithm. A similar script is provided to run STenrich 
+using GO gene sets. Note: The STenrich algorithm can also be executed on a regular computer, 
+using [spatialGE](https://fridleylab.github.io/spatialGE/articles/spatial_enrichment_gradients_smi.html).
+* `spatial_gene_set_enrichment/spatial_plot_geneset_avgexpr.Rmd`: An R script to generate plots
+depicting the average expression of a gene set at each Visium spot. 
+* `spatial_gene_set_enrichment/summarize_stenrich_results.Rmd`: Code to generate a summary 
+(heatmap) of the gene sets with evidence of significant spatial enrichment.
 
 ## `manuscript_figures`
 The `manuscript_figures` folder contains a script to generate figures included in the manuscript
