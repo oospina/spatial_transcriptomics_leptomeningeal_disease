@@ -1,0 +1,144 @@
+--ref=tumor --out_rm=F --min_nb=3 --robust=F --distsumm=avg
+--ref=tumor --out_rm=F --min_nb=3 --robust=T --distsumm=avg
+--ref=tumor --out_rm=F --min_nb=6 --robust=F --distsumm=avg
+--ref=tumor --out_rm=F --min_nb=6 --robust=T --distsumm=avg
+--ref=tumor --out_rm=F --limit=700 --min_nb=3 --robust=F --distsumm=avg
+--ref=tumor --out_rm=F --limit=700 --min_nb=3 --robust=T --distsumm=avg
+--ref=tumor --out_rm=F --limit=700 --min_nb=6 --robust=F --distsumm=avg
+--ref=tumor --out_rm=F --limit=700 --min_nb=6 --robust=T --distsumm=avg
+--ref=tumor --out_rm=F --limit=900 --min_nb=3 --robust=F --distsumm=avg
+--ref=tumor --out_rm=F --limit=900 --min_nb=3 --robust=T --distsumm=avg
+--ref=tumor --out_rm=F --limit=900 --min_nb=6 --robust=F --distsumm=avg
+--ref=tumor --out_rm=F --limit=900 --min_nb=6 --robust=T --distsumm=avg
+--ref=tumor --out_rm=T --min_nb=3 --robust=F --distsumm=avg
+--ref=tumor --out_rm=T --min_nb=6 --robust=F --distsumm=avg
+--ref=tumor --out_rm=T --limit=700 --min_nb=3 --robust=F --distsumm=avg
+--ref=tumor --out_rm=T --limit=700 --min_nb=6 --robust=F --distsumm=avg
+--ref=tumor --out_rm=T --limit=900 --min_nb=3 --robust=F --distsumm=avg
+--ref=tumor --out_rm=T --limit=900 --min_nb=6 --robust=F --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=F --min_nb=3 --robust=F --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=F --min_nb=3 --robust=T --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=F --min_nb=6 --robust=F --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=F --min_nb=6 --robust=T --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=F --limit=700 --min_nb=3 --robust=F --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=F --limit=700 --min_nb=3 --robust=T --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=F --limit=700 --min_nb=6 --robust=F --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=F --limit=700 --min_nb=6 --robust=T --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=F --limit=900 --min_nb=3 --robust=F --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=F --limit=900 --min_nb=3 --robust=T --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=F --limit=900 --min_nb=6 --robust=F --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=F --limit=900 --min_nb=6 --robust=T --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=T --min_nb=3 --robust=F --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=T --min_nb=6 --robust=F --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=T --limit=700 --min_nb=3 --robust=F --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=T --limit=700 --min_nb=6 --robust=F --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=T --limit=900 --min_nb=3 --robust=F --distsumm=avg
+--ref=tumor --exclude=immune --out_rm=T --limit=900 --min_nb=6 --robust=F --distsumm=avg
+--ref=stroma --out_rm=F --min_nb=3 --robust=F --distsumm=avg
+--ref=stroma --out_rm=F --min_nb=3 --robust=T --distsumm=avg
+--ref=stroma --out_rm=F --min_nb=6 --robust=F --distsumm=avg
+--ref=stroma --out_rm=F --min_nb=6 --robust=T --distsumm=avg
+--ref=stroma --out_rm=F --limit=700 --min_nb=3 --robust=F --distsumm=avg
+--ref=stroma --out_rm=F --limit=700 --min_nb=3 --robust=T --distsumm=avg
+--ref=stroma --out_rm=F --limit=700 --min_nb=6 --robust=F --distsumm=avg
+--ref=stroma --out_rm=F --limit=700 --min_nb=6 --robust=T --distsumm=avg
+--ref=stroma --out_rm=F --limit=900 --min_nb=3 --robust=F --distsumm=avg
+--ref=stroma --out_rm=F --limit=900 --min_nb=3 --robust=T --distsumm=avg
+--ref=stroma --out_rm=F --limit=900 --min_nb=6 --robust=F --distsumm=avg
+--ref=stroma --out_rm=F --limit=900 --min_nb=6 --robust=T --distsumm=avg
+--ref=stroma --out_rm=T --min_nb=3 --robust=F --distsumm=avg
+--ref=stroma --out_rm=T --min_nb=6 --robust=F --distsumm=avg
+--ref=stroma --out_rm=T --limit=700 --min_nb=3 --robust=F --distsumm=avg
+--ref=stroma --out_rm=T --limit=700 --min_nb=6 --robust=F --distsumm=avg
+--ref=stroma --out_rm=T --limit=900 --min_nb=3 --robust=F --distsumm=avg
+--ref=stroma --out_rm=T --limit=900 --min_nb=6 --robust=F --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=F --min_nb=3 --robust=F --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=F --min_nb=3 --robust=T --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=F --min_nb=6 --robust=F --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=F --min_nb=6 --robust=T --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=F --limit=700 --min_nb=3 --robust=F --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=F --limit=700 --min_nb=3 --robust=T --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=F --limit=700 --min_nb=6 --robust=F --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=F --limit=700 --min_nb=6 --robust=T --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=F --limit=900 --min_nb=3 --robust=F --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=F --limit=900 --min_nb=3 --robust=T --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=F --limit=900 --min_nb=6 --robust=F --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=F --limit=900 --min_nb=6 --robust=T --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=T --min_nb=3 --robust=F --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=T --min_nb=6 --robust=F --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=T --limit=700 --min_nb=3 --robust=F --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=T --limit=700 --min_nb=6 --robust=F --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=T --limit=900 --min_nb=3 --robust=F --distsumm=avg
+--ref=stroma --exclude=immune --out_rm=T --limit=900 --min_nb=6 --robust=F --distsumm=avg
+--ref=tumor --out_rm=F --min_nb=3 --robust=F --distsumm=min
+--ref=tumor --out_rm=F --min_nb=3 --robust=T --distsumm=min
+--ref=tumor --out_rm=F --min_nb=6 --robust=F --distsumm=min
+--ref=tumor --out_rm=F --min_nb=6 --robust=T --distsumm=min
+--ref=tumor --out_rm=F --limit=700 --min_nb=3 --robust=F --distsumm=min
+--ref=tumor --out_rm=F --limit=700 --min_nb=3 --robust=T --distsumm=min
+--ref=tumor --out_rm=F --limit=700 --min_nb=6 --robust=F --distsumm=min
+--ref=tumor --out_rm=F --limit=700 --min_nb=6 --robust=T --distsumm=min
+--ref=tumor --out_rm=F --limit=900 --min_nb=3 --robust=F --distsumm=min
+--ref=tumor --out_rm=F --limit=900 --min_nb=3 --robust=T --distsumm=min
+--ref=tumor --out_rm=F --limit=900 --min_nb=6 --robust=F --distsumm=min
+--ref=tumor --out_rm=F --limit=900 --min_nb=6 --robust=T --distsumm=min
+--ref=tumor --out_rm=T --min_nb=3 --robust=F --distsumm=min
+--ref=tumor --out_rm=T --min_nb=6 --robust=F --distsumm=min
+--ref=tumor --out_rm=T --limit=700 --min_nb=3 --robust=F --distsumm=min
+--ref=tumor --out_rm=T --limit=700 --min_nb=6 --robust=F --distsumm=min
+--ref=tumor --out_rm=T --limit=900 --min_nb=3 --robust=F --distsumm=min
+--ref=tumor --out_rm=T --limit=900 --min_nb=6 --robust=F --distsumm=min
+--ref=tumor --exclude=immune --out_rm=F --min_nb=3 --robust=F --distsumm=min
+--ref=tumor --exclude=immune --out_rm=F --min_nb=3 --robust=T --distsumm=min
+--ref=tumor --exclude=immune --out_rm=F --min_nb=6 --robust=F --distsumm=min
+--ref=tumor --exclude=immune --out_rm=F --min_nb=6 --robust=T --distsumm=min
+--ref=tumor --exclude=immune --out_rm=F --limit=700 --min_nb=3 --robust=F --distsumm=min
+--ref=tumor --exclude=immune --out_rm=F --limit=700 --min_nb=3 --robust=T --distsumm=min
+--ref=tumor --exclude=immune --out_rm=F --limit=700 --min_nb=6 --robust=F --distsumm=min
+--ref=tumor --exclude=immune --out_rm=F --limit=700 --min_nb=6 --robust=T --distsumm=min
+--ref=tumor --exclude=immune --out_rm=F --limit=900 --min_nb=3 --robust=F --distsumm=min
+--ref=tumor --exclude=immune --out_rm=F --limit=900 --min_nb=3 --robust=T --distsumm=min
+--ref=tumor --exclude=immune --out_rm=F --limit=900 --min_nb=6 --robust=F --distsumm=min
+--ref=tumor --exclude=immune --out_rm=F --limit=900 --min_nb=6 --robust=T --distsumm=min
+--ref=tumor --exclude=immune --out_rm=T --min_nb=3 --robust=F --distsumm=min
+--ref=tumor --exclude=immune --out_rm=T --min_nb=6 --robust=F --distsumm=min
+--ref=tumor --exclude=immune --out_rm=T --limit=700 --min_nb=3 --robust=F --distsumm=min
+--ref=tumor --exclude=immune --out_rm=T --limit=700 --min_nb=6 --robust=F --distsumm=min
+--ref=tumor --exclude=immune --out_rm=T --limit=900 --min_nb=3 --robust=F --distsumm=min
+--ref=tumor --exclude=immune --out_rm=T --limit=900 --min_nb=6 --robust=F --distsumm=min
+--ref=stroma --out_rm=F --min_nb=3 --robust=F --distsumm=min
+--ref=stroma --out_rm=F --min_nb=3 --robust=T --distsumm=min
+--ref=stroma --out_rm=F --min_nb=6 --robust=F --distsumm=min
+--ref=stroma --out_rm=F --min_nb=6 --robust=T --distsumm=min
+--ref=stroma --out_rm=F --limit=700 --min_nb=3 --robust=F --distsumm=min
+--ref=stroma --out_rm=F --limit=700 --min_nb=3 --robust=T --distsumm=min
+--ref=stroma --out_rm=F --limit=700 --min_nb=6 --robust=F --distsumm=min
+--ref=stroma --out_rm=F --limit=700 --min_nb=6 --robust=T --distsumm=min
+--ref=stroma --out_rm=F --limit=900 --min_nb=3 --robust=F --distsumm=min
+--ref=stroma --out_rm=F --limit=900 --min_nb=3 --robust=T --distsumm=min
+--ref=stroma --out_rm=F --limit=900 --min_nb=6 --robust=F --distsumm=min
+--ref=stroma --out_rm=F --limit=900 --min_nb=6 --robust=T --distsumm=min
+--ref=stroma --out_rm=T --min_nb=3 --robust=F --distsumm=min
+--ref=stroma --out_rm=T --min_nb=6 --robust=F --distsumm=min
+--ref=stroma --out_rm=T --limit=700 --min_nb=3 --robust=F --distsumm=min
+--ref=stroma --out_rm=T --limit=700 --min_nb=6 --robust=F --distsumm=min
+--ref=stroma --out_rm=T --limit=900 --min_nb=3 --robust=F --distsumm=min
+--ref=stroma --out_rm=T --limit=900 --min_nb=6 --robust=F --distsumm=min
+--ref=stroma --exclude=immune --out_rm=F --min_nb=3 --robust=F --distsumm=min
+--ref=stroma --exclude=immune --out_rm=F --min_nb=3 --robust=T --distsumm=min
+--ref=stroma --exclude=immune --out_rm=F --min_nb=6 --robust=F --distsumm=min
+--ref=stroma --exclude=immune --out_rm=F --min_nb=6 --robust=T --distsumm=min
+--ref=stroma --exclude=immune --out_rm=F --limit=700 --min_nb=3 --robust=F --distsumm=min
+--ref=stroma --exclude=immune --out_rm=F --limit=700 --min_nb=3 --robust=T --distsumm=min
+--ref=stroma --exclude=immune --out_rm=F --limit=700 --min_nb=6 --robust=F --distsumm=min
+--ref=stroma --exclude=immune --out_rm=F --limit=700 --min_nb=6 --robust=T --distsumm=min
+--ref=stroma --exclude=immune --out_rm=F --limit=900 --min_nb=3 --robust=F --distsumm=min
+--ref=stroma --exclude=immune --out_rm=F --limit=900 --min_nb=3 --robust=T --distsumm=min
+--ref=stroma --exclude=immune --out_rm=F --limit=900 --min_nb=6 --robust=F --distsumm=min
+--ref=stroma --exclude=immune --out_rm=F --limit=900 --min_nb=6 --robust=T --distsumm=min
+--ref=stroma --exclude=immune --out_rm=T --min_nb=3 --robust=F --distsumm=min
+--ref=stroma --exclude=immune --out_rm=T --min_nb=6 --robust=F --distsumm=min
+--ref=stroma --exclude=immune --out_rm=T --limit=700 --min_nb=3 --robust=F --distsumm=min
+--ref=stroma --exclude=immune --out_rm=T --limit=700 --min_nb=6 --robust=F --distsumm=min
+--ref=stroma --exclude=immune --out_rm=T --limit=900 --min_nb=3 --robust=F --distsumm=min
+--ref=stroma --exclude=immune --out_rm=T --limit=900 --min_nb=6 --robust=F --distsumm=min

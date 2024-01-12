@@ -1,0 +1,124 @@
+---
+title: "Summary of experiments gene expression gradients to reference (STgradient)"
+---
+```{r include=F, message=F}
+library('tidyverse')
+library('ComplexHeatmap')
+```
+
+```{r include=F}
+# Compile all results in a single data frame
+# Get result files
+fp = 'gene_expr_gradients_hpcrun/'
+fps = list.files(fp, pattern='xlsx', full.names=T)
+
+# Loop through files
+gene_res = list()
+for(i in 1:length(fps)){
+  samples = readxl::excel_sheets(fps[i])
+  for(samplename in samples){
+    gene_res[[paste0(samplename, i)]] = readxl::read_excel(fps[i], sheet=samplename) %>%
+      add_column(expmt=str_extract(fps[i], 'ref_[a-zA-Z0-9_]+.xlsx') %>%
+                   str_replace(., '\\.xlsx', '')) %>%
+      add_column(samplename=samplename, .before=1)
+  }
+}
+# Combine all data frames
+all_res = do.call(bind_rows, gene_res)
+
+rm(gene_res, fp, fps, samples) # Clean environment
+```
+
+```{r include=F}
+# Split experiment arguments
+all_res = all_res %>%
+  mutate(reference=case_when(str_detect(expmt, 'ref_stroma') ~ 'from_stroma',
+                             str_detect(expmt, 'ref_tumor') ~ 'from_tumor',
+                             TRUE ~ NA_character_)) %>%
+  mutate(summary_stat=case_when(str_detect(expmt, '_avg_') ~ 'avg_dist',
+                                str_detect(expmt, '_min_') ~ 'min_dist',
+                                TRUE ~ NA_character_)) %>%
+  mutate(rm_outliers=case_when(str_detect(expmt, 'outrm_FALSE') ~ 'no',
+                               str_detect(expmt, 'outrm_TRUE') ~ 'yes',
+                               TRUE ~ NA_character_)) %>%
+  mutate(dist_limit=case_when(str_detect(expmt, '_limitrange_') ~ str_replace(str_extract(expmt, '_limitrange_[0-9]+'), '_limitrange_', ''),
+                              TRUE ~ NA_character_) %>% as.integer()) %>%
+  mutate(excluded=case_when(str_detect(expmt, '_excl_') ~ str_replace(str_extract(expmt, '_excl_[a-z]+'), '_excl_', ''),
+                            TRUE ~ NA_character_)) %>%
+  mutate(neighbors=case_when(str_detect(expmt, '_minnb_') ~ str_replace(str_extract(expmt, '_minnb_[0-9]+'), '_minnb_', ''),
+                             TRUE ~ NA_character_) %>% as.integer()) %>%
+  mutate(robust_reg=case_when(str_detect(expmt, 'robreg_FALSE') ~ 'no',
+                              str_detect(expmt, 'robreg_TRUE') ~ 'yes',
+                              TRUE ~ NA_character_))
+```
+
+```{r echo=F}
+# Plot log10 p-values
+# Specify sample to plot
+sample_name = "sample8_LMM_B3"
+
+# Specify experiments to plot
+expmt_x = 'ref_stroma_avg_outrm_FALSE_excl_immune_minnb_3_robreg_TRUE'
+expmt_y = 'ref_stroma_avg_outrm_FALSE_excl_immune_minnb_3_robreg_FALSE'
+
+# Create data frame with data to plot
+df_tmp = all_res %>%
+  filter(samplename == sample_name) %>% 
+  filter(expmt == expmt_x | expmt == expmt_y) %>%
+  pivot_wider(gene, names_from='expmt', values_from='dist2ref_p') %>%
+  mutate(expmt_x := log10(.[[expmt_x]]) * -1) %>%
+  mutate(expmt_y := log10(.[[expmt_y]]) * -1)
+
+# Make plot
+pval_p = ggplot(df_tmp) +
+  geom_point(aes(x=expmt_x, y=expmt_y), size=0.5) +
+  ggrepel::geom_text_repel(data=df_tmp %>%
+              filter(expmt_x > 50 & expmt_y > 50), aes(x=expmt_x, y=expmt_y, label=gene), color='red') +
+  geom_abline(slope=1) +
+  xlab(str_replace(as.character(expmt_x), '(?<=outrm_TRUE|outrm_FALSE)_', '\n')) +
+  ylab(str_replace(as.character(expmt_y), '(?<=outrm_TRUE|outrm_FALSE)_', '\n')) +
+  ggtitle(paste0('-log10(p_val) - ', sample_name)) +
+  coord_equal() +
+  theme(panel.border=element_rect(color='black', fill=NA))
+
+pval_p
+```
+
+```{r echo=F, fig.height=5, fig.width=3}
+# Create heatmap of p-values
+expmt1 = 'ref_stroma_avg_outrm_FALSE_excl_immune_minnb_3_robreg_TRUE'
+expmt2 = 'ref_tumor_avg_outrm_FALSE_excl_immune_minnb_3_robreg_TRUE'
+hm_mtx = all_res %>%
+  mutate(samplename=paste0(samplename, '_', reference)) %>%
+  filter((expmt  == !!expmt1 | expmt == !!expmt2) & adjpval_dist2ref < 0.05) %>%
+  filter(dist2ref_spearman <= -0.2 | dist2ref_spearman >= 0.2) %>%
+  select(samplename, gene, dist2ref_spearman) %>%
+  arrange(samplename) %>%
+  pivot_wider(names_from='samplename', values_from='dist2ref_spearman') %>%
+  column_to_rownames(var='gene') %>%
+  as.matrix()
+
+hm_annot = HeatmapAnnotation(df=tibble(sample_name=colnames(hm_mtx),
+                                       ref=str_extract(colnames(hm_mtx), 'from_stroma|from_tumor')) %>%
+                               column_to_rownames(var='sample_name'), 
+                             col=list(ref=c(from_tumor='cornflowerblue', from_stroma='coral1')))
+
+hm_mtx = hm_mtx[order(rowMeans(hm_mtx, na.rm=T)), ]
+
+pdf(paste0('summary_spearman_coefs.pdf'), height=90, width=8)
+print(
+  Heatmap(hm_mtx, 
+          cluster_columns=F, 
+          cluster_rows=F,
+          show_row_names=T, 
+          column_title=paste0('spearman_coefficients\n',
+                              str_replace(expmt1, 'ref_tumor_|ref_stroma_', '')),
+          heatmap_legend_param=list(title="Spearman"),
+          bottom_annotation=hm_annot)
+)
+dev.off()
+
+# Save heatmap as a spreadsheet
+openxlsx::write.xlsx(as.data.frame(hm_mtx) %>% rownames_to_column(var='gene'), file='summary_spearman_coefs_table.xlsx')
+```
+

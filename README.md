@@ -73,6 +73,25 @@ depicting the average expression of a gene set at each Visium spot.
 * `spatial_gene_set_enrichment/summarize_stenrich_results.Rmd`: Code to generate a summary 
 (heatmap) of the gene sets with evidence of significant spatial enrichment.
 
+## `gene_expression_spatial_gradients`
+The `gene_expression_spatial_gradients` folder contains code to run the STgradient algorithm.
+Details about the STgradient algorithm can be found [here](https://fridleylab.github.io/spatialGE/articles/spatial_enrichment_gradients_smi.html).
+The code was written to be used in a high performance computing (HPC) environment, however, 
+interested readers can also run the STgradient algorithm using the function implemented in spatialGE.
+* `gene_expression_spatial_gradients/compute_pairwise_distances.Rmd`: Code to calculate the
+Euclidean distances of each Visium spot to a reference tissue niche (e.g., tumor, stroma).
+The distances are used during the execution of the STgradient algorithm.
+* `gene_expression_spatial_gradients/gene_expr_gradients_hpcrun/run_expr_gradients_correlations.sh`:
+A Slurm script to run the STgradient algorithm in an HPC environment across different combinations of
+parameters specified in `data/stgradient_arguments_runs.txt`. Note: The STgradient algorithm can 
+also be executed on a regular computer, using [spatialGE](https://fridleylab.github.io/spatialGE/articles/spatial_enrichment_gradients_smi.html).
+* `gene_expression_spatial_gradients/compute_pairwise_distances.Rmd`: The R script containing
+the STgradient algorithm using an HPC environment. Note: The STgradient algorithm can also 
+be executed on a regular computer, using [spatialGE](https://fridleylab.github.io/spatialGE/articles/spatial_enrichment_gradients_smi.html).
+* `gene_expression_spatial_gradients/compare_correlation_results.Rmd`: A script to create a 
+summary (heatmap) of the significant correlations between distance to a tissue niche and
+gene expression (spatial gradient).
+
 ## `manuscript_figures`
 The `manuscript_figures` folder contains a script to generate figures included in the manuscript
 * `manuscript_figures/figures_lmm_manuscript.Rmd`: An R Markdown script to generate the individual
@@ -91,3 +110,9 @@ which that relates sample names and Illumina dual-indexes used in library constr
 * `data/topic_manual_deconvolution.xlsx`: The final biological annotations given to each LDA 
 topic and the original annotation given by GSEA. The rationale for changes in final annotation
 is also provided in this file.
+* `data/stgradient_arguments_runs.txt`: A file containing the different parameters to run 
+STgradient. Used in the Slurm script: `gene_expression_spatial_gradients/gene_expr_gradients_hpcrun/run_expr_gradients_correlations.sh`.
+* `data\spot_domain_majority_classes.xlsx`: An workbook containng the labels (tumor|immune|stroma)
+for each spot based on the STdeconvolve deconvolution. Classes were assigned based on 50% of 
+cell types belonging to one of three categories. This file is used in `gene_expression_spatial_gradients/gene_expr_gradients_hpcrun/expr_gradients_stdeconvolve_collapsed.R`.
+

@@ -1,0 +1,38 @@
+---
+title: "Compute distances among all spots (to use later in STgradient analysis)"
+---
+
+```{r include=F}
+library('tidyverse')
+library('Seurat')
+```
+
+```{r include=F}
+# Read Seurat objects
+seurat_obj = readRDS(file='[NAMED_LIST_SEURAT_OBJECTS]')
+```
+
+```{r include=F, warning=F, eval=T}
+# Calculate distances between all spots
+distance_dfs = list()
+for(i in names(seurat_obj)){
+  # Get coordinates
+  df_tmp = seurat_obj[[i]]@images[[i]]@coordinates %>%
+    rownames_to_column('barcode') 
+  
+  # Calculate euclidean distances
+  edists = rdist::pdist(as.matrix(df_tmp[, 5:6]), metric='euclidean')
+  
+  # Put back row and column names
+  colnames(edists) = df_tmp$barcode
+  rownames(edists) = df_tmp$barcode
+  
+    # Save min/mean distances to list
+  distance_dfs[[i]] = edists
+}
+
+# Save R object with distances
+ds_fp = paste0('../data/euclidean_distances_all_spots.xlsx')
+openxlsx::write.xlsx(distance_dfs, file=ds_fp)
+```
+
